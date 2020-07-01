@@ -1,3 +1,3 @@
-# Beam Wallet Service
+## Beam Wallet Service
 
-This wallet service. It allows to implement lightweight wallets using BEAM API.
+This is the beam wallet service. It allows to implement lightweight wallets using BEAM API.
