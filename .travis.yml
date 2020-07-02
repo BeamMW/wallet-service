@@ -23,7 +23,7 @@ matrix:
       go:
          - 1.14.x
       script:
-         #- cd $BALANCER_PATH && go build
+         - cd $BALANCER_PATH && go build
       after_success:
          #- tar cvzf service-balancer.tar.gz --directory=$BALANCER_PATH service-balancer  config.json
          #- cd $BALANCER_PATH && ls
