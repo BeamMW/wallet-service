@@ -1,8 +1,8 @@
 package main
 
 import (
-	"beam.mw/service-balancer/wsclient"
 	"encoding/json"
+	"github.com/BeamMW/wallet-service/service-balancer/wsclient"
 	"log"
 )
 

@@ -1,8 +1,8 @@
 package main
 
 import (
-	"beam.mw/service-balancer/services"
 	"fmt"
+	"github.com/BeamMW/wallet-service/service-balancer/services"
 	"log"
 	"runtime"
 )

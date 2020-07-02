@@ -1,10 +1,10 @@
 package main
 
 import (
-	"beam.mw/service-balancer/services"
-	"beam.mw/service-balancer/wsclient"
 	"encoding/json"
 	"errors"
+	"github.com/BeamMW/wallet-service/service-balancer/services"
+	"github.com/BeamMW/wallet-service/service-balancer/wsclient"
 	"log"
 	"strconv"
 	"sync"

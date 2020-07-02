@@ -1,8 +1,8 @@
 package main
 
 import (
-	"beam.mw/service-balancer/services"
 	"errors"
+	"github.com/BeamMW/wallet-service/service-balancer/services"
 	"github.com/capnm/sysinfo"
 	syscall "golang.org/x/sys/unix"
 	"log"

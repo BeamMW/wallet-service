@@ -1,9 +1,9 @@
 package main
 
 import (
-	"beam.mw/service-balancer/wsclient"
 	"encoding/json"
 	"fmt"
+	"github.com/BeamMW/wallet-service/service-balancer/wsclient"
 )
 
 func jsonRpcProcessBbs (client *wsclient.WSClient, msg []byte) (response []byte) {
