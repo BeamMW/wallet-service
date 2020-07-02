@@ -21,7 +21,7 @@ matrix:
          #- S3_UPLOAD_PATH=$TRAVIS_BRANCH/$(date +%Y.%m.%d)/$BUILD_TYPE/$TARGET_TYPE/
          #- S3_LATEST_UPLOAD_PATH=$TRAVIS_BRANCH/latest/$BUILD_TYPE/$TARGET_TYPE/
       go:
-         - 1.13.x
+         - 1.14.x
       script:
          #- cd $BALANCER_PATH && go build
       after_success:
