@@ -5,7 +5,7 @@ matrix:
   include:
 
 ###############################################################################
-# Service balancer 
+# Service balancer, linux Release
 ###############################################################################
     - os: linux
       dist: bionic
@@ -15,9 +15,11 @@ matrix:
          - BUILD_TYPE=Release
          - GOOS=linux
          - GOARCH=amd64
+         - OS_FOLDER=linux
          - BALANCER_PATH=$HOME/build/BeamMW/wallet-service/service-balancer/
          - DATE=$(date +%Y.%m.%d)
          - FTP_UPLOAD_PATH=${BUILD_SERVER}/$TRAVIS_BRANCH/$DATE/$BUILD_TYPE/$OS_FOLDER/
+         - FTP_LATEST_UPLOAD_PATH=${BUILD_SERVER}/$TRAVIS_BRANCH/latest/$BUILD_TYPE/$OS_FOLDER/
          - S3_UPLOAD_PATH=$TRAVIS_BRANCH/$DATE/$BUILD_TYPE/$OS_FOLDER/
          - S3_LATEST_UPLOAD_PATH=$TRAVIS_BRANCH/latest/$BUILD_TYPE/$OS_FOLDER/
       go:
