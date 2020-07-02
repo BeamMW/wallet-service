@@ -16,7 +16,8 @@ matrix:
          - GOOS=linux
          - GOARCH=amd64
          - BALANCER_PATH=$HOME/build/BeamMW/wallet-service/service-balancer/
-         - FTP_UPLOAD_PATH=${BUILD_SERVER}/files/$TRAVIS_BRANCH/$(date +%Y.%m.%d)/$BUILD_TYPE/$TARGET_TYPE/
+         - DATE=$(date +%Y.%m.%d)
+         - FTP_UPLOAD_PATH=${BUILD_SERVER}/files/$TRAVIS_BRANCH/$DATE/$BUILD_TYPE/$TARGET_TYPE/
          #- S3_UPLOAD_PATH=$TRAVIS_BRANCH/$(date +%Y.%m.%d)/$BUILD_TYPE/$TARGET_TYPE/
          #- S3_LATEST_UPLOAD_PATH=$TRAVIS_BRANCH/latest/$BUILD_TYPE/$TARGET_TYPE/
       go:
