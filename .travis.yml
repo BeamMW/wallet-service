@@ -25,11 +25,11 @@ matrix:
       before_install:
          - cd $BALANCER_PATH
       script:
-         - cd $BALANCER_PATH && go build
+         - cd $BALANCER_PATH && go build -ldflags "-X main.balancerVersion=N/A"
       after_success:
-         #- tar cvzf service-balancer.tar.gz --directory=$BALANCER_PATH service-balancer  config.json
-         #- cd $BALANCER_PATH && ls
-         #- curl --retry 3 --ftp-create-dirs -T service-balancer.tar.gz $FTP_UPLOAD_PATH
+         - tar cvzf service-balancer.tar.gz --directory=$BALANCER_PATH service-balancer  config.json
+         - cd $BALANCER_PATH && ls
+         - curl --retry 3 --ftp-create-dirs -T service-balancer.tar.gz $FTP_UPLOAD_PATH
          #- artifacts upload --target-paths "$S3_UPLOAD_PATH" service-balancer.tar.gz
          #- artifacts upload --target-paths "$S3_LATEST_UPLOAD_PATH" service-balancer.tar.gz
 
