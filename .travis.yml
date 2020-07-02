@@ -17,9 +17,9 @@ matrix:
          - GOARCH=amd64
          - BALANCER_PATH=$HOME/build/BeamMW/wallet-service/service-balancer/
          - DATE=$(date +%Y.%m.%d)
-         - FTP_UPLOAD_PATH=${BUILD_SERVER}/$TRAVIS_BRANCH/$DATE/$BUILD_TYPE/$TARGET_TYPE/
-         - S3_UPLOAD_PATH=$TRAVIS_BRANCH/$DATE/$BUILD_TYPE/$TARGET_TYPE/
-         - S3_LATEST_UPLOAD_PATH=$TRAVIS_BRANCH/latest/$BUILD_TYPE/$TARGET_TYPE/
+         - FTP_UPLOAD_PATH=${BUILD_SERVER}/$TRAVIS_BRANCH/$DATE/$BUILD_TYPE/$OS_FOLDER/
+         - S3_UPLOAD_PATH=$TRAVIS_BRANCH/$DATE/$BUILD_TYPE/$OS_FOLDER/
+         - S3_LATEST_UPLOAD_PATH=$TRAVIS_BRANCH/latest/$BUILD_TYPE/$OS_FOLDER/
       go:
          - 1.14.x
       before_install:
@@ -27,7 +27,7 @@ matrix:
       script:
          - cd $BALANCER_PATH && go build -ldflags "-X main.balancerVersion=N/A"
       after_success:
-         - tar cvzf service-balancer.tar.gz --directory=$BALANCER_PATH service-balancer  config.json
+         - tar cvzf service-balancer.tar.gz --directory=$BALANCER_PATH service-balancer config.json
          - cd $BALANCER_PATH && ls
          - echo $FTP_UPLOAD_PATH
          - curl --retry 3 --ftp-create-dirs -T service-balancer.tar.gz $FTP_UPLOAD_PATH
