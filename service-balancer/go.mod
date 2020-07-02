@@ -1,6 +1,6 @@
-module beam.mw/service-balancer
+module github.com/BeamMW/wallet-service/service-balancer
 
-go 1.13
+go 1.14
 
 require (
 	github.com/SherClockHolmes/webpush-go v1.1.0
