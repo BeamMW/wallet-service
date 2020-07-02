@@ -17,9 +17,9 @@ matrix:
          - GOARCH=amd64
          - BALANCER_PATH=$HOME/build/BeamMW/wallet-service/service-balancer/
          - DATE=$(date +%Y.%m.%d)
-         - FTP_UPLOAD_PATH=${BUILD_SERVER}/files/wallet-service/$TRAVIS_BRANCH/$DATE/$BUILD_TYPE/$TARGET_TYPE/
-         #- S3_UPLOAD_PATH=$TRAVIS_BRANCH/$(date +%Y.%m.%d)/$BUILD_TYPE/$TARGET_TYPE/
-         #- S3_LATEST_UPLOAD_PATH=$TRAVIS_BRANCH/latest/$BUILD_TYPE/$TARGET_TYPE/
+         - FTP_UPLOAD_PATH=${BUILD_SERVER}/$TRAVIS_BRANCH/$DATE/$BUILD_TYPE/$TARGET_TYPE/
+         - S3_UPLOAD_PATH=$TRAVIS_BRANCH/$DATE/$BUILD_TYPE/$TARGET_TYPE/
+         - S3_LATEST_UPLOAD_PATH=$TRAVIS_BRANCH/latest/$BUILD_TYPE/$TARGET_TYPE/
       go:
          - 1.14.x
       before_install:
@@ -31,8 +31,10 @@ matrix:
          - cd $BALANCER_PATH && ls
          - echo $FTP_UPLOAD_PATH
          - curl --retry 3 --ftp-create-dirs -T service-balancer.tar.gz $FTP_UPLOAD_PATH
-         #- artifacts upload --target-paths "$S3_UPLOAD_PATH" service-balancer.tar.gz
-         #- artifacts upload --target-paths "$S3_LATEST_UPLOAD_PATH" service-balancer.tar.gz
+         - echo $S3_UPLOAD_PATH
+         - artifacts upload --target-paths "$S3_UPLOAD_PATH" service-balancer.tar.gz
+         - echo S3_LATEST_UPLOAD_PATH
+         - artifacts upload --target-paths "$S3_LATEST_UPLOAD_PATH" service-balancer.tar.gz
 
 ###############################################################################
 # Common part
