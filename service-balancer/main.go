@@ -19,6 +19,9 @@ func main () {
 		if args[0] == "vapid-keys" {
 			printNewVAPIDKeys()
 			return
+		} else if args[0] == "version" {
+			printVersion()
+			return
 		} else {
 			log.Fatalf("unknown command: %v", args[0])
 		}

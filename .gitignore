@@ -1,3 +1,6 @@
 .idea
 cmake-build-debug
+pkg
 beam_version.gen
+service-balancer/logs
+service-balancer/sbbs-data

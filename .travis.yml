@@ -5,29 +5,81 @@ matrix:
   include:
 
 ###############################################################################
-# Service balancer 
+# Linux Release
+###############################################################################
+    - os: linux
+      dist: trusty
+      language: cpp
+      cache: ccache
+      addons:
+        apt:
+          update: true
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - g++-7
+            - libssl-dev
+            - curl
+            - libxi-dev
+            - libcups2-dev
+      install:
+        - export TZ=Etc/GMT-3
+        # install new version cmake
+        - DEPS_DIR="${TRAVIS_BUILD_DIR}/deps"
+        - mkdir ${DEPS_DIR} && cd ${DEPS_DIR}
+        - travis_retry wget --no-check-certificate https://github.com/Kitware/CMake/releases/download/v3.14.0/cmake-3.14.0-Linux-x86_64.tar.gz
+        - tar -xvf cmake-3.14.0-Linux-x86_64.tar.gz > /dev/null
+        - mv cmake-3.14.0-Linux-x86_64 cmake-install
+        - PATH=${DEPS_DIR}/cmake-install:${DEPS_DIR}/cmake-install/bin:$PATH
+        - cd ${TRAVIS_BUILD_DIR}
+        - cmake --version
+        - sudo git clone --depth=1 https://github.com/BeamMW/boost-linux.git /usr/local/boost_1_69_0
+        - export BOOST_ROOT="/usr/local/boost_1_69_0"
+        - eval "CC=gcc-7 && CXX=g++-7"
+      env:
+        - BUILD_TYPE=Release
+        - OS_FOLDER=linux
+      script:
+        - git apply 3rdparty/protobuf-patch.diff
+        - cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DDEBUG_MESSAGES_IN_RELEASE_MODE=On -DBEAM_LINK_TYPE=Static -DBRANCH_NAME=$TRAVIS_BRANCH -DBEAM_HW_WALLET=Off .
+        - make -j$(nproc)
+        # extract build version
+        - BEAM_VERSION="$(cat beam_version.gen)" && rm beam_version.gen
+        - echo BEAM_VERSION = $BEAM_VERSION
+
+###############################################################################
+# Service balancer, linux Release
 ###############################################################################
     - os: linux
       dist: bionic
       language: go
-       env:
+      env:
          - TARGET_TYPE=go
          - BUILD_TYPE=Release
          - GOOS=linux
          - GOARCH=amd64
-       go:
-         - 1.13.x
-       install:
-         - export BALANCER_PATH=wallet/service-balancer
-     script:
-         - cd $HOME/build/BeamMW/wallet-service/service-balancer/ && go build
-       after_success:
-         - tar cvzf service-balancer.tar.gz --directory=$HOME/build/BeamMW/wallet-service/service-balancer/ service-balancer  config.json
-         - cd $HOME/build/BeamMW/wallet-service/service-balancer && ls
-         - BUILDS_SERVER_PATH=${BUILD_SERVER}/files/$TRAVIS_BRANCH/$(date +%Y.%m.%d)/$BUILD_TYPE/$TARGET_TYPE
-         - curl --retry 3 --ftp-create-dirs -T service-balancer.tar.gz $BUILDS_SERVER_PATH/
-         - artifacts upload --target-paths "$TRAVIS_BRANCH/$(date +%Y.%m.%d)/$BUILD_TYPE/$TARGET_TYPE/" service-balancer.tar.gz
-         - artifacts upload --target-paths "$TRAVIS_BRANCH/latest/$BUILD_TYPE/$TARGET_TYPE/" service-balancer.tar.gz
+         - OS_FOLDER=linux
+         - BALANCER_PATH=$HOME/build/BeamMW/wallet-service/service-balancer/
+         - DATE=$(date +%Y.%m.%d)
+         - FTP_UPLOAD_PATH=${BUILD_SERVER}/$TRAVIS_BRANCH/$DATE/$BUILD_TYPE/$OS_FOLDER/
+         - FTP_LATEST_UPLOAD_PATH=${BUILD_SERVER}/$TRAVIS_BRANCH/latest/$BUILD_TYPE/$OS_FOLDER/
+         - S3_UPLOAD_PATH=$TRAVIS_BRANCH/$DATE/$BUILD_TYPE/$OS_FOLDER/
+         - S3_LATEST_UPLOAD_PATH=$TRAVIS_BRANCH/latest/$BUILD_TYPE/$OS_FOLDER/
+      go:
+         - 1.14.x
+      before_install:
+         - cd $BALANCER_PATH
+      script:
+         - cd $BALANCER_PATH && go build -ldflags "-X main.balancerVersion=N/A"
+      after_success:
+         - tar cvzf service-balancer.tar.gz --directory=$BALANCER_PATH service-balancer config.json
+         - cd $BALANCER_PATH && ls
+         - echo $FTP_UPLOAD_PATH
+         - curl --retry 3 --ftp-create-dirs -T service-balancer.tar.gz $FTP_UPLOAD_PATH
+         - echo $S3_UPLOAD_PATH
+         - artifacts upload --target-paths "$S3_UPLOAD_PATH" service-balancer.tar.gz
+         - echo S3_LATEST_UPLOAD_PATH
+         - artifacts upload --target-paths "$S3_LATEST_UPLOAD_PATH" service-balancer.tar.gz
 
 ###############################################################################
 # Common part

@@ -11,7 +11,7 @@
   "VAPIDPrivate":           "",
   "ListenAddress":          ":20000",
   "AllowedOrigin":          "",
-  "PushContactMail":        "support@beam.mw",
+  "PushContactMail":        "",
   "DatabasePath":           "./sbbs-data",
   "APISecret":              "secret",
   "Debug":                  true
