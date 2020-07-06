@@ -110,7 +110,7 @@ matrix:
       after_success:
          - BALANCER_ARCHIVE=service-balancer$BEAM_TARGET_SUFFIX-$PROJECT_VERSION.tar.gz
          - BALANCER_ARCHIVE_LATEST=service-balancer$BEAM_TARGET_SUFFIX.tar.gz
-         - BALANCER_NAME=service-balancer-$BEAM_TARGET_SUFFIX
+         - BALANCER_NAME=service-balancer$BEAM_TARGET_SUFFIX
          - cp service-balancer $BALANCER_NAME
          - tar cvzf $BALANCER_ARCHIVE --directory=$BALANCER_PATH $BALANCER_NAME config.json
          - cp $BALANCER_ARCHIVE $BALANCER_ARCHIVE_LATEST
