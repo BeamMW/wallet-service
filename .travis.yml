@@ -103,8 +103,9 @@ matrix:
       before_install:
          - cd $BALANCER_PATH
       script:
-         - cd $BALANCER_PATH && go build -ldflags "-X main.balancerVersion=N/A"
-         - echo PROJECT_VERSION = $PROJECT_VERSION
+         - PROJECT_VERSION=$(bash ./get_balancer_version.sh)
+         - echo PROJECT_VERSION=$PROJECT_VERSION
+         - cd $BALANCER_PATH && go build -ldflags "-X main.balancerVersion=$PROJECT_VERSION"
       after_success:
          - BALANCER_ARCHIVE=service-balancer.tar.gz
          - tar cvzf $BALANCER_ARCHIVE --directory=$BALANCER_PATH service-balancer config.json
@@ -116,7 +117,7 @@ matrix:
          - artifacts upload --target-paths "$S3_UPLOAD_PATH" $BALANCER_ARCHIVE
          # upload to the latest build folder
          - echo $FTP_LATEST_UPLOAD_PATH
-         - curl --retry 3 --ftp-create-dirs -T $BALANCER_ARCHIVE $FTP_UPLOAD_PATH/$BALANCER_ARCHIVE
+         - curl --retry 3 --ftp-create-dirs -T $BALANCER_ARCHIVE $FTP_LATEST_UPLOAD_PATH/$BALANCER_ARCHIVE
          - echo S3_LATEST_UPLOAD_PATH
          - artifacts upload --target-paths "$S3_LATEST_UPLOAD_PATH" $BALANCER_ARCHIVE
 
