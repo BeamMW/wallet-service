@@ -39,16 +39,31 @@ matrix:
       env:
         - BUILD_TYPE=Release
         - OS_FOLDER=linux
+        - DATE=$(date +%Y.%m.%d)
+        - SERVICE_PATH=$HOME/build/BeamMW/wallet-service/service/
+        - FTP_UPLOAD_PATH=${BUILD_SERVER}/$TRAVIS_BRANCH/$DATE/$BUILD_TYPE/$OS_FOLDER/
+        - FTP_LATEST_UPLOAD_PATH=${BUILD_SERVER}/$TRAVIS_BRANCH/latest/$BUILD_TYPE/$OS_FOLDER/
+        - S3_UPLOAD_PATH=$TRAVIS_BRANCH/$DATE/$BUILD_TYPE/$OS_FOLDER/
+        - S3_LATEST_UPLOAD_PATH=$TRAVIS_BRANCH/latest/$BUILD_TYPE/$OS_FOLDER/
+        - SERVICE_ARCHIVE=wallet-service$BEAM_TARGET_SUFFIX-$PROJECT_VERSION.tar.gz
+        - SBBS_ARCHIVE=sbbs-monitor$BEAM_TARGET_SUFFIX-$PROJECT_VERSION.tar.gz
       script:
         - git apply 3rdparty/protobuf-patch.diff
         - cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DDEBUG_MESSAGES_IN_RELEASE_MODE=On -DBEAM_LINK_TYPE=Static -DBRANCH_NAME=$TRAVIS_BRANCH -DBEAM_HW_WALLET=Off .
         - make -j$(nproc)
         # extract build version
-        - BEAM_VERSION="$(cat beam_version.gen)" && rm beam_version.gen
-        - echo BEAM_VERSION = $BEAM_VERSION
+        - PROJECT_VERSION="$(cat project_version.gen)" && rm project_version.gen
+        - echo PROJECT_VERSION = $PROJECT_VERSION
+      after_success:
+        - tar -cvzf $SERVICE_ARCHIVE --directory=$SERVICE_PATH wallet-service$BEAM_TARGET_SUFFIX
+        - tar -cvzf $SBBS_ARCHIVE --directory=$SERVICE_PATH sbbs-monitor$BEAM_TARGET_SUFFIX
+        - cd $SERVICE_PATH && ls
+        - echo $FTP_UPLOAD_PATH
+        - curl --retry 3 --ftp-create-dirs -T $SERVICE_ARCHIVE $FTP_UPLOAD_PATH
+        - curl --retry 3 --ftp-create-dirs -T $SBBS_ARCHIVE $FTP_UPLOAD_PATH
 
 ###############################################################################
-# Service balancer, linux Release
+# Service Balancer, Linux Release
 ###############################################################################
     - os: linux
       dist: bionic
@@ -71,6 +86,7 @@ matrix:
          - cd $BALANCER_PATH
       script:
          - cd $BALANCER_PATH && go build -ldflags "-X main.balancerVersion=N/A"
+         - echo PROJECT_VERSION = $PROJECT_VERSION
       after_success:
          - tar cvzf service-balancer.tar.gz --directory=$BALANCER_PATH service-balancer config.json
          - cd $BALANCER_PATH && ls
