@@ -92,7 +92,8 @@ matrix:
          - GOOS=linux
          - GOARCH=amd64
          - OS_FOLDER=linux
-         - BALANCER_PATH=$HOME/build/BeamMW/wallet-service/service-balancer
+         - WALLET_SERVICE_PATH=$HOME/build/BeamMW/wallet-service
+         - BALANCER_PATH=$WALLET_SERVICE_PATH/service-balancer
          - DATE=$(date +%Y.%m.%d)
          - FTP_UPLOAD_PATH=${BUILD_SERVER}/$TRAVIS_BRANCH/$DATE/$BUILD_TYPE/$OS_FOLDER
          - FTP_LATEST_UPLOAD_PATH=${BUILD_SERVER}/$TRAVIS_BRANCH/latest/$BUILD_TYPE/$OS_FOLDER
@@ -100,10 +101,8 @@ matrix:
          - S3_LATEST_UPLOAD_PATH=$TRAVIS_BRANCH/latest/$BUILD_TYPE/$OS_FOLDER
       go:
          - 1.14.x
-      before_install:
-         - cd $BALANCER_PATH
       script:
-         - PROJECT_VERSION=$(bash ./get_balancer_version.sh)
+         - PROJECT_VERSION=$(cd $WALLET_SERVICE_PATH && bash ./get_balancer_version.sh)
          - echo PROJECT_VERSION=$PROJECT_VERSION
          - cd $BALANCER_PATH && go build -ldflags "-X main.balancerVersion=$PROJECT_VERSION"
       after_success:
