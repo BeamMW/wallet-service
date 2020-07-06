@@ -108,9 +108,11 @@ matrix:
          - echo PROJECT_VERSION=$PROJECT_VERSION
          - cd $BALANCER_PATH && go build -ldflags "-X main.balancerVersion=$PROJECT_VERSION"
       after_success:
-         - BALANCER_ARCHIVE=service-balancer$PROJECT_VERSION.tar.gz
-         - BALANCER_ARCHIVE_LATEST=service-balancer.tar.gz
-         - tar cvzf $BALANCER_ARCHIVE --directory=$BALANCER_PATH service-balancer config.json
+         - BALANCER_ARCHIVE=service-balancer$BEAM_TARGET_SUFFIX-$PROJECT_VERSION.tar.gz
+         - BALANCER_ARCHIVE_LATEST=service-balancer$BEAM_TARGET_SUFFIX.tar.gz
+         - BALANCER_NAME=service-balancer-$BEAM_TARGET_SUFFIX
+         - cp service-balancer $BALANCER_NAME
+         - tar cvzf $BALANCER_ARCHIVE --directory=$BALANCER_PATH $BALANCER_NAME config.json
          - cp $BALANCER_ARCHIVE $BALANCER_ARCHIVE_LATEST
          - echo "Created Archives" && cd $BALANCER_PATH && ls *.tar.gz
          # upload to the dated build folder
