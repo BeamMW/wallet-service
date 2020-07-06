@@ -109,7 +109,7 @@ matrix:
          - cd $BALANCER_PATH && go build -ldflags "-X main.balancerVersion=$PROJECT_VERSION"
       after_success:
          - BALANCER_ARCHIVE=service-balancer$PROJECT_VERSION.tar.gz
-         - BALANCER_ARCHIVE_LATEST=service-balancer$PROJECT_VERSION.tar.gz
+         - BALANCER_ARCHIVE_LATEST=service-balancer.tar.gz
          - tar cvzf $BALANCER_ARCHIVE --directory=$BALANCER_PATH service-balancer config.json
          - cp $BALANCER_ARCHIVE $BALANCER_ARCHIVE_LATEST
          - echo "Created Archives" && cd $BALANCER_PATH && ls *.tar.gz
