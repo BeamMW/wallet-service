@@ -40,13 +40,11 @@ matrix:
         - BUILD_TYPE=Release
         - OS_FOLDER=linux
         - DATE=$(date +%Y.%m.%d)
-        - SERVICE_PATH=$HOME/build/BeamMW/wallet-service/service/
-        - FTP_UPLOAD_PATH=${BUILD_SERVER}/$TRAVIS_BRANCH/$DATE/$BUILD_TYPE/$OS_FOLDER/
-        - FTP_LATEST_UPLOAD_PATH=${BUILD_SERVER}/$TRAVIS_BRANCH/latest/$BUILD_TYPE/$OS_FOLDER/
-        - S3_UPLOAD_PATH=$TRAVIS_BRANCH/$DATE/$BUILD_TYPE/$OS_FOLDER/
-        - S3_LATEST_UPLOAD_PATH=$TRAVIS_BRANCH/latest/$BUILD_TYPE/$OS_FOLDER/
-        - SERVICE_ARCHIVE=wallet-service$BEAM_TARGET_SUFFIX-$PROJECT_VERSION.tar.gz
-        - SBBS_ARCHIVE=sbbs-monitor$BEAM_TARGET_SUFFIX-$PROJECT_VERSION.tar.gz
+        - SERVICE_PATH=$HOME/build/BeamMW/wallet-service/service
+        - FTP_UPLOAD_PATH=${BUILD_SERVER}/$TRAVIS_BRANCH/$DATE/$BUILD_TYPE/$OS_FOLDER
+        - FTP_LATEST_UPLOAD_PATH=${BUILD_SERVER}/$TRAVIS_BRANCH/latest/$BUILD_TYPE/$OS_FOLDER
+        - S3_UPLOAD_PATH=$TRAVIS_BRANCH/$DATE/$BUILD_TYPE/$OS_FOLDER
+        - S3_LATEST_UPLOAD_PATH=$TRAVIS_BRANCH/latest/$BUILD_TYPE/$OS_FOLDER
       script:
         - cd beam
         - git apply 3rdparty/protobuf-patch.diff
@@ -58,12 +56,19 @@ matrix:
         - PROJECT_VERSION="$(cat project_version.gen)" && rm project_version.gen
         - echo PROJECT_VERSION = $PROJECT_VERSION
       after_success:
+        - SERVICE_ARCHIVE=wallet-service$BEAM_TARGET_SUFFIX-$PROJECT_VERSION.tar.gz
+        - SBBS_ARCHIVE=sbbs-monitor$BEAM_TARGET_SUFFIX-$PROJECT_VERSION.tar.gz
         - tar -cvzf $SERVICE_ARCHIVE --directory=$SERVICE_PATH wallet-service$BEAM_TARGET_SUFFIX
         - tar -cvzf $SBBS_ARCHIVE --directory=$SERVICE_PATH sbbs-monitor$BEAM_TARGET_SUFFIX
         - cd $SERVICE_PATH && ls
+        # upload to the dated build folder
         - echo $FTP_UPLOAD_PATH
         - curl --retry 3 --ftp-create-dirs -T $SERVICE_ARCHIVE $FTP_UPLOAD_PATH
         - curl --retry 3 --ftp-create-dirs -T $SBBS_ARCHIVE $FTP_UPLOAD_PATH
+        # upload to the latest build folder
+        - echo $FTP_LATEST_UPLOAD_PATH
+        - curl --retry 3 --ftp-create-dirs -T $SERVICE_ARCHIVE $FTP_LATEST_UPLOAD_PATH/wallet-service$BEAM_TARGET_SUFFIX.tar.gz
+        - curl --retry 3 --ftp-create-dirs -T $SBBS_ARCHIVE $FTP_LATEST_UPLOAD_PATH/sbbs-monitor$BEAM_TARGET_SUFFIX.tar.gz
 
 ###############################################################################
 # Service Balancer, Linux Release
@@ -77,12 +82,12 @@ matrix:
          - GOOS=linux
          - GOARCH=amd64
          - OS_FOLDER=linux
-         - BALANCER_PATH=$HOME/build/BeamMW/wallet-service/service-balancer/
+         - BALANCER_PATH=$HOME/build/BeamMW/wallet-service/service-balancer
          - DATE=$(date +%Y.%m.%d)
-         - FTP_UPLOAD_PATH=${BUILD_SERVER}/$TRAVIS_BRANCH/$DATE/$BUILD_TYPE/$OS_FOLDER/
-         - FTP_LATEST_UPLOAD_PATH=${BUILD_SERVER}/$TRAVIS_BRANCH/latest/$BUILD_TYPE/$OS_FOLDER/
-         - S3_UPLOAD_PATH=$TRAVIS_BRANCH/$DATE/$BUILD_TYPE/$OS_FOLDER/
-         - S3_LATEST_UPLOAD_PATH=$TRAVIS_BRANCH/latest/$BUILD_TYPE/$OS_FOLDER/
+         - FTP_UPLOAD_PATH=${BUILD_SERVER}/$TRAVIS_BRANCH/$DATE/$BUILD_TYPE/$OS_FOLDER
+         - FTP_LATEST_UPLOAD_PATH=${BUILD_SERVER}/$TRAVIS_BRANCH/latest/$BUILD_TYPE/$OS_FOLDER
+         - S3_UPLOAD_PATH=$TRAVIS_BRANCH/$DATE/$BUILD_TYPE/$OS_FOLDER
+         - S3_LATEST_UPLOAD_PATH=$TRAVIS_BRANCH/latest/$BUILD_TYPE/$OS_FOLDER
       go:
          - 1.14.x
       before_install:
