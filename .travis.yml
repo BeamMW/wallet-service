@@ -57,18 +57,28 @@ matrix:
         - echo PROJECT_VERSION = $PROJECT_VERSION
       after_success:
         - SERVICE_ARCHIVE=wallet-service$BEAM_TARGET_SUFFIX-$PROJECT_VERSION.tar.gz
+        - SERVICE_ARCHIVE_LATEST=wallet-service$BEAM_TARGET_SUFFIX.tar.gz
         - SBBS_ARCHIVE=sbbs-monitor$BEAM_TARGET_SUFFIX-$PROJECT_VERSION.tar.gz
+        - SBBS_ARCHIVE_LATEST=sbbs-monitor$BEAM_TARGET_SUFFIX.tar.gz
         - tar -cvzf $SERVICE_ARCHIVE --directory=$SERVICE_PATH wallet-service$BEAM_TARGET_SUFFIX
         - tar -cvzf $SBBS_ARCHIVE --directory=$SERVICE_PATH sbbs-monitor$BEAM_TARGET_SUFFIX
-        - cd $SERVICE_PATH && ls
+        - echo "Created Archives Folder Content" && ls
         # upload to the dated build folder
         - echo $FTP_UPLOAD_PATH
+        - echo $S3_UPLOAD_PATH
         - curl --retry 3 --ftp-create-dirs -T $SERVICE_ARCHIVE $FTP_UPLOAD_PATH
         - curl --retry 3 --ftp-create-dirs -T $SBBS_ARCHIVE $FTP_UPLOAD_PATH
+        - artifacts upload --target-paths "$S3_UPLOAD_PATH" $SERVICE_ARCHIVE
+        - artifacts upload --target-paths "$S3_UPLOAD_PATH" $SBBS_ARCHIVE
         # upload to the latest build folder
         - echo $FTP_LATEST_UPLOAD_PATH
-        - curl --retry 3 --ftp-create-dirs -T $SERVICE_ARCHIVE $FTP_LATEST_UPLOAD_PATH/wallet-service$BEAM_TARGET_SUFFIX.tar.gz
-        - curl --retry 3 --ftp-create-dirs -T $SBBS_ARCHIVE $FTP_LATEST_UPLOAD_PATH/sbbs-monitor$BEAM_TARGET_SUFFIX.tar.gz
+        - echo $S3_LATEST_UPLOAD_PATH
+        - curl --retry 3 --ftp-create-dirs -T $SERVICE_ARCHIVE $FTP_LATEST_UPLOAD_PATH/$SERVICE_ARCHIVE_LATEST
+        - curl --retry 3 --ftp-create-dirs -T $SBBS_ARCHIVE $FTP_LATEST_UPLOAD_PATH/$SBBS_ARCHIVE_LATEST
+        - cp $SERVICE_ARCHIVE $SERVICE_ARCHIVE_LATEST
+        - cp $SERVICE_ARCHIVE $SBBS_ARCHIVE_LATEST
+        - artifacts upload --target-paths "$S3_LATEST_UPLOAD_PATH" $SERVICE_ARCHIVE_LATEST
+        - artifacts upload --target-paths "$S3_LATEST_UPLOAD_PATH" $SBBS_ARCHIVE_LATEST
 
 ###############################################################################
 # Service Balancer, Linux Release
@@ -96,14 +106,19 @@ matrix:
          - cd $BALANCER_PATH && go build -ldflags "-X main.balancerVersion=N/A"
          - echo PROJECT_VERSION = $PROJECT_VERSION
       after_success:
-         - tar cvzf service-balancer.tar.gz --directory=$BALANCER_PATH service-balancer config.json
+         - BALANCER_ARCHIVE=service-balancer.tar.gz
+         - tar cvzf $BALANCER_ARCHIVE --directory=$BALANCER_PATH service-balancer config.json
          - cd $BALANCER_PATH && ls
+         # upload to the dated build folder
          - echo $FTP_UPLOAD_PATH
-         - curl --retry 3 --ftp-create-dirs -T service-balancer.tar.gz $FTP_UPLOAD_PATH
          - echo $S3_UPLOAD_PATH
-         - artifacts upload --target-paths "$S3_UPLOAD_PATH" service-balancer.tar.gz
+         - curl --retry 3 --ftp-create-dirs -T $BALANCER_ARCHIVE $FTP_UPLOAD_PATH
+         - artifacts upload --target-paths "$S3_UPLOAD_PATH" $BALANCER_ARCHIVE
+         # upload to the latest build folder
+         - echo $FTP_LATEST_UPLOAD_PATH
+         - curl --retry 3 --ftp-create-dirs -T $BALANCER_ARCHIVE $FTP_UPLOAD_PATH
          - echo S3_LATEST_UPLOAD_PATH
-         - artifacts upload --target-paths "$S3_LATEST_UPLOAD_PATH" service-balancer.tar.gz
+         - artifacts upload --target-paths "$S3_LATEST_UPLOAD_PATH" $BALANCER_ARCHIVE
 
 ###############################################################################
 # Common part
