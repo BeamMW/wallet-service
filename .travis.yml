@@ -39,16 +39,49 @@ matrix:
       env:
         - BUILD_TYPE=Release
         - OS_FOLDER=linux
+        - DATE=$(date +%Y.%m.%d)
+        - SERVICE_PATH=$HOME/build/BeamMW/wallet-service/service
+        - FTP_UPLOAD_PATH=${BUILD_SERVER}/$TRAVIS_BRANCH/$DATE/$BUILD_TYPE/$OS_FOLDER
+        - FTP_LATEST_UPLOAD_PATH=${BUILD_SERVER}/$TRAVIS_BRANCH/latest/$BUILD_TYPE/$OS_FOLDER
+        - S3_UPLOAD_PATH=$TRAVIS_BRANCH/$DATE/$BUILD_TYPE/$OS_FOLDER
+        - S3_LATEST_UPLOAD_PATH=$TRAVIS_BRANCH/latest/$BUILD_TYPE/$OS_FOLDER
       script:
+        - cd beam
         - git apply 3rdparty/protobuf-patch.diff
+        - cd ..
         - cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DDEBUG_MESSAGES_IN_RELEASE_MODE=On -DBEAM_LINK_TYPE=Static -DBRANCH_NAME=$TRAVIS_BRANCH -DBEAM_HW_WALLET=Off .
         - make -j$(nproc)
         # extract build version
-        - BEAM_VERSION="$(cat beam_version.gen)" && rm beam_version.gen
-        - echo BEAM_VERSION = $BEAM_VERSION
+        - echo "Main Folder Content" && ls
+        - PROJECT_VERSION="$(cat project_version.gen)" && rm project_version.gen
+        - echo PROJECT_VERSION = $PROJECT_VERSION
+      after_success:
+        - SERVICE_ARCHIVE=wallet-service$BEAM_TARGET_SUFFIX-$PROJECT_VERSION.tar.gz
+        - SERVICE_ARCHIVE_LATEST=wallet-service$BEAM_TARGET_SUFFIX.tar.gz
+        - SBBS_ARCHIVE=sbbs-monitor$BEAM_TARGET_SUFFIX-$PROJECT_VERSION.tar.gz
+        - SBBS_ARCHIVE_LATEST=sbbs-monitor$BEAM_TARGET_SUFFIX.tar.gz
+        - tar -cvzf $SERVICE_ARCHIVE --directory=$SERVICE_PATH wallet-service$BEAM_TARGET_SUFFIX
+        - cp $SERVICE_ARCHIVE $SERVICE_ARCHIVE_LATEST
+        - tar -cvzf $SBBS_ARCHIVE --directory=$SERVICE_PATH sbbs-monitor$BEAM_TARGET_SUFFIX
+        - cp $SERVICE_ARCHIVE $SBBS_ARCHIVE_LATEST
+        - echo "Created Archives Folder Content" && ls *.tar.gz
+        # upload to the dated build folder
+        - echo $FTP_UPLOAD_PATH
+        - echo $S3_UPLOAD_PATH
+        - curl --retry 3 --ftp-create-dirs -T $SERVICE_ARCHIVE $FTP_UPLOAD_PATH/$SERVICE_ARCHIVE
+        - curl --retry 3 --ftp-create-dirs -T $SBBS_ARCHIVE $FTP_UPLOAD_PATH/$SBBS_ARCHIVE
+        - artifacts upload --target-paths "$S3_UPLOAD_PATH" $SERVICE_ARCHIVE
+        - artifacts upload --target-paths "$S3_UPLOAD_PATH" $SBBS_ARCHIVE
+        # upload to the latest build folder
+        - echo $FTP_LATEST_UPLOAD_PATH
+        - echo $S3_LATEST_UPLOAD_PATH
+        - curl --retry 3 --ftp-create-dirs -T $SERVICE_ARCHIVE_LATEST $FTP_LATEST_UPLOAD_PATH/$SERVICE_ARCHIVE_LATEST
+        - curl --retry 3 --ftp-create-dirs -T $SBBS_ARCHIVE_LATEST $FTP_LATEST_UPLOAD_PATH/$SBBS_ARCHIVE_LATEST
+        - artifacts upload --target-paths "$S3_LATEST_UPLOAD_PATH" $SERVICE_ARCHIVE_LATEST
+        - artifacts upload --target-paths "$S3_LATEST_UPLOAD_PATH" $SBBS_ARCHIVE_LATEST
 
 ###############################################################################
-# Service balancer, linux Release
+# Service Balancer, Linux Release
 ###############################################################################
     - os: linux
       dist: bionic
@@ -59,27 +92,39 @@ matrix:
          - GOOS=linux
          - GOARCH=amd64
          - OS_FOLDER=linux
-         - BALANCER_PATH=$HOME/build/BeamMW/wallet-service/service-balancer/
+         - WALLET_SERVICE_PATH=$HOME/build/BeamMW/wallet-service
+         - BALANCER_PATH=$WALLET_SERVICE_PATH/service-balancer
          - DATE=$(date +%Y.%m.%d)
-         - FTP_UPLOAD_PATH=${BUILD_SERVER}/$TRAVIS_BRANCH/$DATE/$BUILD_TYPE/$OS_FOLDER/
-         - FTP_LATEST_UPLOAD_PATH=${BUILD_SERVER}/$TRAVIS_BRANCH/latest/$BUILD_TYPE/$OS_FOLDER/
-         - S3_UPLOAD_PATH=$TRAVIS_BRANCH/$DATE/$BUILD_TYPE/$OS_FOLDER/
-         - S3_LATEST_UPLOAD_PATH=$TRAVIS_BRANCH/latest/$BUILD_TYPE/$OS_FOLDER/
+         - FTP_UPLOAD_PATH=${BUILD_SERVER}/$TRAVIS_BRANCH/$DATE/$BUILD_TYPE/$OS_FOLDER
+         - FTP_LATEST_UPLOAD_PATH=${BUILD_SERVER}/$TRAVIS_BRANCH/latest/$BUILD_TYPE/$OS_FOLDER
+         - S3_UPLOAD_PATH=$TRAVIS_BRANCH/$DATE/$BUILD_TYPE/$OS_FOLDER
+         - S3_LATEST_UPLOAD_PATH=$TRAVIS_BRANCH/latest/$BUILD_TYPE/$OS_FOLDER
       go:
          - 1.14.x
       before_install:
-         - cd $BALANCER_PATH
+        - cd $BALANCER_PATH
       script:
-         - cd $BALANCER_PATH && go build -ldflags "-X main.balancerVersion=N/A"
+         - PROJECT_VERSION=$(cd $WALLET_SERVICE_PATH && bash ./get_balancer_version.sh)
+         - echo PROJECT_VERSION=$PROJECT_VERSION
+         - cd $BALANCER_PATH && go build -ldflags "-X main.balancerVersion=$PROJECT_VERSION"
       after_success:
-         - tar cvzf service-balancer.tar.gz --directory=$BALANCER_PATH service-balancer config.json
-         - cd $BALANCER_PATH && ls
+         - BALANCER_ARCHIVE=service-balancer$BEAM_TARGET_SUFFIX-$PROJECT_VERSION.tar.gz
+         - BALANCER_ARCHIVE_LATEST=service-balancer$BEAM_TARGET_SUFFIX.tar.gz
+         - BALANCER_NAME=service-balancer$BEAM_TARGET_SUFFIX
+         - cp service-balancer $BALANCER_NAME
+         - tar cvzf $BALANCER_ARCHIVE --directory=$BALANCER_PATH $BALANCER_NAME config.json
+         - cp $BALANCER_ARCHIVE $BALANCER_ARCHIVE_LATEST
+         - echo "Created Archives" && cd $BALANCER_PATH && ls *.tar.gz
+         # upload to the dated build folder
          - echo $FTP_UPLOAD_PATH
-         - curl --retry 3 --ftp-create-dirs -T service-balancer.tar.gz $FTP_UPLOAD_PATH
          - echo $S3_UPLOAD_PATH
-         - artifacts upload --target-paths "$S3_UPLOAD_PATH" service-balancer.tar.gz
+         - curl --retry 3 --ftp-create-dirs -T $BALANCER_ARCHIVE $FTP_UPLOAD_PATH/$BALANCER_ARCHIVE
+         - artifacts upload --target-paths "$S3_UPLOAD_PATH" $BALANCER_ARCHIVE
+         # upload to the latest build folder
+         - echo $FTP_LATEST_UPLOAD_PATH
+         - curl --retry 3 --ftp-create-dirs -T $BALANCER_ARCHIVE_LATEST $FTP_LATEST_UPLOAD_PATH/$BALANCER_ARCHIVE_LATEST
          - echo S3_LATEST_UPLOAD_PATH
-         - artifacts upload --target-paths "$S3_LATEST_UPLOAD_PATH" service-balancer.tar.gz
+         - artifacts upload --target-paths "$S3_LATEST_UPLOAD_PATH" $BALANCER_ARCHIVE_LATEST
 
 ###############################################################################
 # Common part

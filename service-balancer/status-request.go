@@ -33,6 +33,7 @@ type DBStatus struct {
 }
 
 type statusRes struct {
+    BalancerVersion     string
 	GoMemory            runtime.MemStats
 	SysInfo			    *sysinfo.SI
 	DBDiskTotal         uint64
@@ -97,6 +98,7 @@ func collectStatus(fast bool) (status statusRes) {
 	status.AliveWalletServices = len(status.WalletServices)
 	status.MaxBbsServices      = config.BbsMonitorCnt
 	status.AliveBbsServices    = len(status.BbsServices)
+	status.BalancerVersion     = balancerVersion
 
 	return
 }
