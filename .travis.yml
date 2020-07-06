@@ -108,16 +108,15 @@ matrix:
       after_success:
          - BALANCER_ARCHIVE=service-balancer.tar.gz
          - tar cvzf $BALANCER_ARCHIVE --directory=$BALANCER_PATH service-balancer config.json
-         - echo "Created Archives"
-         - cd $BALANCER_PATH && ls *.tar.gz
+         - echo "Created Archives" && cd $BALANCER_PATH && ls *.tar.gz
          # upload to the dated build folder
          - echo $FTP_UPLOAD_PATH
          - echo $S3_UPLOAD_PATH
-         - curl -v --retry 3 --ftp-create-dirs -T $BALANCER_ARCHIVE $FTP_UPLOAD_PATH
+         - curl -v --retry 3 --ftp-create-dirs -T $BALANCER_ARCHIVE $FTP_UPLOAD_PATH/$BALANCER_ARCHIVE
          - artifacts upload --target-paths "$S3_UPLOAD_PATH" $BALANCER_ARCHIVE
          # upload to the latest build folder
          - echo $FTP_LATEST_UPLOAD_PATH
-         - curl -v --retry 3 --ftp-create-dirs -T $BALANCER_ARCHIVE $FTP_UPLOAD_PATH
+         - curl -v --retry 3 --ftp-create-dirs -T $BALANCER_ARCHIVE $FTP_UPLOAD_PATH/$BALANCER_ARCHIVE
          - echo S3_LATEST_UPLOAD_PATH
          - artifacts upload --target-paths "$S3_LATEST_UPLOAD_PATH" $BALANCER_ARCHIVE
 
