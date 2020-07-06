@@ -63,7 +63,7 @@ matrix:
         - tar -cvzf $SERVICE_ARCHIVE --directory=$SERVICE_PATH wallet-service$BEAM_TARGET_SUFFIX
         - cp $SERVICE_ARCHIVE $SERVICE_ARCHIVE_LATEST
         - tar -cvzf $SBBS_ARCHIVE --directory=$SERVICE_PATH sbbs-monitor$BEAM_TARGET_SUFFIX
-        - cp $SERVICE_ARCHIVE $SBBS_ARCHIVE_LATEST
+        - cp $SBBS_ARCHIVE $SBBS_ARCHIVE_LATEST
         - echo "Created Archives Folder Content" && ls *.tar.gz
         # upload to the dated build folder
         - echo $FTP_UPLOAD_PATH
