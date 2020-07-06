@@ -106,8 +106,10 @@ matrix:
          - echo PROJECT_VERSION=$PROJECT_VERSION
          - cd $BALANCER_PATH && go build -ldflags "-X main.balancerVersion=$PROJECT_VERSION"
       after_success:
-         - BALANCER_ARCHIVE=service-balancer.tar.gz
+         - BALANCER_ARCHIVE=service-balancer$PROJECT_VERSION.tar.gz
+         - BALANCER_ARCHIVE_LATEST=service-balancer$PROJECT_VERSION.tar.gz
          - tar cvzf $BALANCER_ARCHIVE --directory=$BALANCER_PATH service-balancer config.json
+         - cp $BALANCER_ARCHIVE $BALANCER_ARCHIVE_LATEST
          - echo "Created Archives" && cd $BALANCER_PATH && ls *.tar.gz
          # upload to the dated build folder
          - echo $FTP_UPLOAD_PATH
@@ -116,9 +118,9 @@ matrix:
          - artifacts upload --target-paths "$S3_UPLOAD_PATH" $BALANCER_ARCHIVE
          # upload to the latest build folder
          - echo $FTP_LATEST_UPLOAD_PATH
-         - curl --retry 3 --ftp-create-dirs -T $BALANCER_ARCHIVE $FTP_LATEST_UPLOAD_PATH/$BALANCER_ARCHIVE
+         - curl --retry 3 --ftp-create-dirs -T $BALANCER_ARCHIVE_LATEST $FTP_LATEST_UPLOAD_PATH/$BALANCER_ARCHIVE_LATEST
          - echo S3_LATEST_UPLOAD_PATH
-         - artifacts upload --target-paths "$S3_LATEST_UPLOAD_PATH" $BALANCER_ARCHIVE
+         - artifacts upload --target-paths "$S3_LATEST_UPLOAD_PATH" $BALANCER_ARCHIVE_LATEST
 
 ###############################################################################
 # Common part
