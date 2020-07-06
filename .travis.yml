@@ -101,6 +101,8 @@ matrix:
          - S3_LATEST_UPLOAD_PATH=$TRAVIS_BRANCH/latest/$BUILD_TYPE/$OS_FOLDER
       go:
          - 1.14.x
+      before_install:
+        - cd $BALANCER_PATH
       script:
          - PROJECT_VERSION=$(cd $WALLET_SERVICE_PATH && bash ./get_balancer_version.sh)
          - echo PROJECT_VERSION=$PROJECT_VERSION
