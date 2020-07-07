@@ -66,23 +66,31 @@ matrix:
         - cp sbbs-monitor-masternet sbbs-monitor-testnet
         - cd ${TRAVIS_BUILD_DIR}
         # ------------------------------------------------
+        - echo $SERVICE_ARCHIVE
+        - echo $SERVICE_PATH
         - tar -cvzf $SERVICE_ARCHIVE --directory=$SERVICE_PATH wallet-service$BEAM_TARGET_SUFFIX
+        - echo $SERVICE_ARCHIVE_LATEST
         - cp $SERVICE_ARCHIVE $SERVICE_ARCHIVE_LATEST
+        - echo $SBBS_ARCHIVE
         - tar -cvzf $SBBS_ARCHIVE --directory=$SERVICE_PATH sbbs-monitor$BEAM_TARGET_SUFFIX
+        - echo $SBBS_ARCHIVE_LATEST
         - cp $SBBS_ARCHIVE $SBBS_ARCHIVE_LATEST
         - echo "Created Archives" && ls *.tar.gz
         # upload to the dated build folder
         - echo $FTP_UPLOAD_PATH
-        - echo $S3_UPLOAD_PATH
+        - echo $FTP_UPLOAD_PATH/$SERVICE_ARCHIVE
         - curl --retry 3 --ftp-create-dirs -T $SERVICE_ARCHIVE $FTP_UPLOAD_PATH/$SERVICE_ARCHIVE
+        - echo $FTP_UPLOAD_PATH/$SBBS_ARCHIVE
         - curl --retry 3 --ftp-create-dirs -T $SBBS_ARCHIVE $FTP_UPLOAD_PATH/$SBBS_ARCHIVE
+        - echo $S3_UPLOAD_PATH
         - artifacts upload --target-paths "$S3_UPLOAD_PATH" $SERVICE_ARCHIVE
         - artifacts upload --target-paths "$S3_UPLOAD_PATH" $SBBS_ARCHIVE
         # upload to the latest build folder
-        - echo $FTP_LATEST_UPLOAD_PATH
-        - echo $S3_LATEST_UPLOAD_PATH
+        - echo $FTP_LATEST_UPLOAD_PATH/$SERVICE_ARCHIVE_LATEST
         - curl --retry 3 --ftp-create-dirs -T $SERVICE_ARCHIVE_LATEST $FTP_LATEST_UPLOAD_PATH/$SERVICE_ARCHIVE_LATEST
+        - echo $FTP_LATEST_UPLOAD_PATH/$SBBS_ARCHIVE_LATEST
         - curl --retry 3 --ftp-create-dirs -T $SBBS_ARCHIVE_LATEST $FTP_LATEST_UPLOAD_PATH/$SBBS_ARCHIVE_LATEST
+        - echo $S3_LATEST_UPLOAD_PATH
         - artifacts upload --target-paths "$S3_LATEST_UPLOAD_PATH" $SERVICE_ARCHIVE_LATEST
         - artifacts upload --target-paths "$S3_LATEST_UPLOAD_PATH" $SBBS_ARCHIVE_LATEST
 
