@@ -64,7 +64,7 @@ matrix:
         - echo $SERVICE_ARCHIVE_LATEST
         - cp $SERVICE_ARCHIVE $SERVICE_ARCHIVE_LATEST
         - echo $SBBS_ARCHIVE
-        - tar -cvzf $SBBS_ARCHIVE --directory=$SERVICE_PATH sbbs-monitor$BEAM_TARGET_SUFFIX
+        - tar -cvzf $SBBS_ARCHIVE --directory=$SERVICE_PATH sbbs-monitor$BEAM_TARGET_SUFFIX beam-common.cfg
         - echo $SBBS_ARCHIVE_LATEST
         - cp $SBBS_ARCHIVE $SBBS_ARCHIVE_LATEST
         - echo "Created Archives" && ls *.tar.gz
