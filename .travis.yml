@@ -60,7 +60,11 @@ matrix:
         - SERVICE_ARCHIVE_LATEST=wallet-service$BEAM_TARGET_SUFFIX.tar.gz
         - SBBS_ARCHIVE=sbbs-monitor$BEAM_TARGET_SUFFIX-$PROJECT_VERSION.tar.gz
         - SBBS_ARCHIVE_LATEST=sbbs-monitor$BEAM_TARGET_SUFFIX.tar.gz
-        - tar -cvzf $SERVICE_ARCHIVE --directory=$SERVICE_PATH wallet-service$BEAM_TARGET_SUFFIX
+        - cp ${TRAVIS_BUILD_DIR}/beam/beam-common.cfg $SERVICE_PATH/beam-common.cfg
+        - echo $SERVICE_ARCHIVE
+        - echo $SERVICE_PATH
+        - echo "Service Path Content" && ls $SERVICE_PATH
+        - tar -cvzf $SERVICE_ARCHIVE --directory=$SERVICE_PATH wallet-service$BEAM_TARGET_SUFFIX beam-common.cfg
         - echo $SERVICE_ARCHIVE_LATEST
         - cp $SERVICE_ARCHIVE $SERVICE_ARCHIVE_LATEST
         - echo $SBBS_ARCHIVE
