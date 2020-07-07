@@ -37,8 +37,12 @@ namespace beam::wallet {
         ~WebSocketServer();
 
     protected:
-        virtual void onWSStart() = 0;
-        virtual ClientHandler::Ptr onNewWSClient(SendFunc) = 0;
+        //
+        // ioThread callbacks are called in context of the IO Thread
+        //
+        virtual void ioThread_onWSStart() = 0;
+        virtual ClientHandler::Ptr ioThread_onNewWSClient(SendFunc) = 0;
+
         io::Reactor::Ptr _reactor;
 
     private:

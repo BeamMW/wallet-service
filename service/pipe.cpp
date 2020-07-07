@@ -43,7 +43,7 @@ namespace beam::wallet {
         }
     }
 
-    void Pipe::notify(const std::string& message) const
+    void Pipe::notify(const std::string& message, bool logSuccess) const
     {
         if (_file == nullptr)
         {
@@ -62,25 +62,27 @@ namespace beam::wallet {
         else
         {
             fflush(_file);
-            LOG_DEBUG() << "Sync pipe " << _fd << ": " << message << ", " << wsize << " bytes";
+            if (logSuccess)
+            {
+                // This can be noisy
+                LOG_DEBUG() << "Sync pipe " << _fd << ": " << message << ", " << wsize << " bytes";
+            }
         }
     }
 
     void Pipe::notifyFailed() const
     {
-        notify("FAILED");
+        notify("FAILED", true);
     }
 
     void Pipe::notifyAlive() const
     {
-        notify("ALIVE");
+        bool printLog = _alives++ % (60000 / Pipe::HeartbeatInterval) == 0; // this can overflow but we do not care
+        notify("ALIVE", printLog);
     }
 
     void Pipe::notifyListening() const
     {
-        notify("LISTENING");
+        notify("LISTENING", true);
     }
 }
-
-
-

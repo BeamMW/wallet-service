@@ -501,23 +501,34 @@ namespace
         ~Server() = default;
 
     private:
-        void onWSStart() override
+        void ioThread_onWSStart() override
         {
             if (_withPipes)
             {
                 Pipe syncPipe(Pipe::SyncFileDescriptor);
                 syncPipe.notifyListening();
 
+                LOG_INFO() << "SBBS monitor heartbeat interval: " << msec2readable(Pipe::HeartbeatInterval);
                 _heartbeatPipe = std::make_unique<Pipe>(Pipe::HeartbeatFileDescriptor);
-                _heartbeatTimer = io::Timer::create(*_reactor);
-                _heartbeatTimer->start(Pipe::HeartbeatInterval, true, [this]() {
-                    assert(_heartbeatPipe != nullptr);
-                    _heartbeatPipe->notifyAlive();
-                });
+                _heartbeatPipe->notifyAlive();
+
+                auto holder = std::make_shared<io::AsyncEvent::Ptr>();
+                *holder = io::AsyncEvent::create(*_reactor,
+                    [holder, this]() mutable
+                    {
+                        _heartbeatTimer = io::Timer::create(*_reactor);
+                        _heartbeatTimer->start(Pipe::HeartbeatInterval, true, [this]() {
+                            assert(_heartbeatPipe != nullptr);
+                            _heartbeatPipe->notifyAlive();
+                        });
+                        LOG_INFO () << "SBBS monitor timer started";
+                        holder.reset();
+                    });
+                (*holder)->post();
             }
         }
 
-        WebSocketServer::ClientHandler::Ptr onNewWSClient(WebSocketServer::SendFunc wsSend) override
+        WebSocketServer::ClientHandler::Ptr ioThread_onNewWSClient(WebSocketServer::SendFunc wsSend) override
         {
             return std::make_unique<MonitorClientHandler>(_monitor, wsSend);
         }

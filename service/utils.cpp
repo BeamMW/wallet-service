@@ -24,7 +24,7 @@ namespace beam::wallet {
 
      std::string msec2readable(unsigned sec)
      {
-        return sec2readable(sec / 10000);
+        return sec2readable(sec / 1000);
      }
 
     std::string sec2readable(unsigned sec)
