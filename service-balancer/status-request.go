@@ -102,10 +102,13 @@ func collectStatus(fast bool) (status statusRes) {
 	status.BalancerVersion     = balancerVersion
 
 	// beam-common.cfg presence
-	cfgpath := filepath.Clean("./beam-common.cfg")
-	if _, err := os.Stat(cfgpath); err != nil {
-		status.BeamCommonCfg = cfgpath
-	} else {
+	if cfgpath, err := filepath.Abs("./beam-common.cfg"); err == nil {
+		if _, err := os.Stat(cfgpath); err == nil {
+			status.BeamCommonCfg = cfgpath
+		}
+	}
+
+	if len(status.BeamCommonCfg) == 0 {
 		status.BeamCommonCfg = "Does not exist"
 	}
 
