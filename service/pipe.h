@@ -20,11 +20,12 @@ namespace beam::wallet {
     {
         int _fd = 0;
         FILE *_file = nullptr;
+        mutable unsigned _alives = 0;
     public:
         explicit Pipe(int fd);
         ~Pipe();
 
-        void notify(const std::string &message) const;
+        void notify(const std::string &message, bool logSuccess) const;
         void notifyFailed() const;
         void notifyAlive()  const;
         void notifyListening() const;
@@ -32,5 +33,6 @@ namespace beam::wallet {
         static const int SyncFileDescriptor;
         static const int HeartbeatFileDescriptor;
         static const int HeartbeatInterval;
+
     };
 }
