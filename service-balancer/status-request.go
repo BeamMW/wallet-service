@@ -34,6 +34,7 @@ type DBStatus struct {
 
 type statusRes struct {
     BalancerVersion     string
+	BeamCommonCfg       string
 	GoMemory            runtime.MemStats
 	SysInfo			    *sysinfo.SI
 	DBDiskTotal         uint64
@@ -99,6 +100,14 @@ func collectStatus(fast bool) (status statusRes) {
 	status.MaxBbsServices      = config.BbsMonitorCnt
 	status.AliveBbsServices    = len(status.BbsServices)
 	status.BalancerVersion     = balancerVersion
+
+	// beam-common.cfg presence
+	cfgpath := filepath.Clean("./beam-common.cfg")
+	if _, err := os.Stat(cfgpath); err != nil {
+		status.BeamCommonCfg = cfgpath
+	} else {
+		status.BeamCommonCfg = "Does not exist"
+	}
 
 	return
 }

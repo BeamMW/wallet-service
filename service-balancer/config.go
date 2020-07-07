@@ -122,10 +122,6 @@ func (cfg* Config) Read(fname string, m *melody.Melody) error {
 		return errors.New("config, missing ListenAddress")
 	}
 
-	if len(cfg.PushContactMail) == 0 {
-		return errors.New("config, missing push contact email")
-	}
-
 	if cfg.ServiceLaunchTimeout == 0 {
 		cfg.ServiceLaunchTimeout = 10  * time.Second
 	}
