@@ -67,14 +67,13 @@ matrix:
         - cp sbbs-monitor-masternet sbbs-monitor-testnet
         - cd ${TRAVIS_BUILD_DIR}
         # -----------------------------------------------
-        - cp ${TRAVIS_BUILD_DIR}/beam/beam-common.cfg $SERVICE_PATH/beam-common.cfg
         - echo $SERVICE_ARCHIVE
         - echo $SERVICE_PATH
-        - tar -cvzf $SERVICE_ARCHIVE --directory=$SERVICE_PATH wallet-service$BEAM_TARGET_SUFFIX beam-common.cfg
+        - tar -cvzf $SERVICE_ARCHIVE --directory=$SERVICE_PATH wallet-service$BEAM_TARGET_SUFFIX
         - echo $SERVICE_ARCHIVE_LATEST
         - cp $SERVICE_ARCHIVE $SERVICE_ARCHIVE_LATEST
         - echo $SBBS_ARCHIVE
-        - tar -cvzf $SBBS_ARCHIVE --directory=$SERVICE_PATH sbbs-monitor$BEAM_TARGET_SUFFIX beam-common.cfg
+        - tar -cvzf $SBBS_ARCHIVE --directory=$SERVICE_PATH sbbs-monitor$BEAM_TARGET_SUFFIX
         - echo $SBBS_ARCHIVE_LATEST
         - cp $SBBS_ARCHIVE $SBBS_ARCHIVE_LATEST
         - echo "Created Archives" && ls *.tar.gz
