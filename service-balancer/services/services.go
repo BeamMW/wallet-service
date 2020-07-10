@@ -167,20 +167,74 @@ func (svcs *Services) getNextPort() (port int) {
 	return
 }
 
+func (svcs *Services) monitorService (svcIdx int, service *service) {
+	go func() {
+		var aliveTimeout = time.NewTimer(svcs.config.AliveTimeout)
+
+		for {
+			select {
+			case <- aliveTimeout.C:
+				// No alive signals from service for some time. Usually this means
+				// that connection to the service has been lost and we need to restart it
+				log.Printf("%v %v, alive timeout", svcs.logname, svcIdx)
+				service.Shutdown()
+
+			case <- service.serviceAlive:
+				// This means that alive ping has been received. Timeout timer should be restarted
+				if svcs.config.NoisyLogs {
+					log.Printf("%v %v, service is alive, restarting alive timeout", svcs.logname, svcIdx)
+				}
+				aliveTimeout = time.NewTimer(svcs.config.AliveTimeout)
+
+			case <- service.serviceExit:
+				log.Printf("%v %v, unexpected shutdown [%v]", svcs.logname, svcIdx, service.command.ProcessState)
+
+				var relaunchJob = func () {
+					for {
+						if _, err := svcs.DropAndRelaunch(svcIdx); err != nil {
+							log.Printf("%v %v, failed to relaunch", svcs.logname, err)
+
+							if svcs.GetActiveCnt() == 0 {
+								log.Fatalf("no active services left, halting")
+								return
+							} else {
+								log.Printf("%v, will try to relaunch in %v", svcs.logname, svcs.config.AliveTimeout)
+							}
+						}
+						relaunch := time.NewTicker(svcs.config.AliveTimeout)
+						<- relaunch.C
+					}
+				}
+
+				// start relaunch job
+				go relaunchJob()
+
+				// this particular service died, this particular monitor should exit
+				return
+			}
+		}
+	}()
+}
+
 func (svcs *Services) DropAndRelaunch (svcIdx int) (service *service, err error) {
 	svcs.allMutex.Lock()
-	defer svcs.allMutex.Unlock()
+	svcs.all[svcIdx] = nil  // nothrow
+	svcs.Dropped <- svcIdx  // nothrow
+	svcs.allMutex.Unlock()
 
-	svcs.all[svcIdx] = nil
-	svcs.Dropped <- svcIdx
-
+	// Can take a lot of time, so we do not lock
 	service, err = newService(svcs.config, svcIdx, svcs.getNextPort(), svcs.logname)
 	if err != nil {
 		return
 	}
 
+	svcs.allMutex.Lock()
+	defer svcs.allMutex.Unlock()
+
 	svcs.all[svcIdx] = service
+	svcs.monitorService(svcIdx, service)
 	svcs.Restarted <- svcIdx
+
 	return
 }
 
@@ -204,48 +258,17 @@ func NewServices(cfg *Config, svcsCnt int, logname string) (result *Services, er
 		config:      cfg,
 	}
 
-	for i := 0; i < svcsCnt; i++ {
-		service, launchErr := newService(cfg, i, result.getNextPort(), logname)
+	for idx := 0; idx < svcsCnt; idx++ {
+		service, launchErr := newService(cfg, idx, result.getNextPort(), logname)
+
 		if launchErr != nil {
 			err = launchErr
 			return
 		}
 
-		result.all[i] = service
-		var svcIdx = i
-
-		go func() {
-			var aliveTimeout = time.NewTimer(cfg.AliveTimeout)
-
-			for {
-				select {
-				case <- aliveTimeout.C:
-					// No alive signals from service for some time. Usually this means
-					// that connection to the service has been lost and we need to restart it
-					log.Printf("%v %v, alive timeout", logname, svcIdx)
-					service.Shutdown()
-
-				case <- service.serviceAlive:
-					// This means that alive ping has been received. Timeout timer should be restarted
-					if cfg.NoisyLogs {
-						log.Printf("%v %v, service is alive, restarting alive timeout", logname, svcIdx)
-					}
-					aliveTimeout = time.NewTimer(cfg.AliveTimeout)
-
-				case <- service.serviceExit:
-					log.Printf("%v %v, unexpected shutdown [%v]", logname, svcIdx, service.command.ProcessState)
-					if service, err = result.DropAndRelaunch(svcIdx); err != nil {
-						log.Printf("%v %v, failed to relaunch", logname, err)
-						if result.GetActiveCnt() == 0 {
-							log.Fatalf("no active services left, halting")
-						}
-					}
-				}
-			}
-		}()
+		result.all[idx] = service
+		result.monitorService(idx, service)
 	}
 
 	return
 }
-
-
