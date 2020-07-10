@@ -31,7 +31,7 @@ func collectActivityLog () string {
 
 func startActivityLog () {
 	var printActivity = func () {
-		log.Printf("[====  Activity report  ====]\n%s\n[===========================]\n", collectActivityLog())
+		log.Printf("\n[====  Activity report  ====]\n%s\n[===========================]\n", collectActivityLog())
 	}
 	printActivity()
 	ticker := time.NewTicker(config.ActivityLogInterval)

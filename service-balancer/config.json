@@ -1,9 +1,9 @@
 {
-  "BeamNodeAddress":        "eu-node01.masternet.beam.mw:8100",
-  "WalletServicePath":      "wallet-service-masternet",
+  "BeamNodeAddress":        "eu-node01.testnet.beam.mw:8100",
+  "WalletServicePath":      "wallet-service-testnet",
   "WalletServiceFirstPort": 30000,
   "WalletServiceLastPort":  30100,
-  "BbsMonitorPath":         "sbbs-monitor-masternet",
+  "BbsMonitorPath":         "sbbs-monitor-testnet",
   "BbsMonitorFirstPort":    32000,
   "BbsMonitorLastPort":     32100,
   "ServicePublicAddress":   "127.0.0.1",

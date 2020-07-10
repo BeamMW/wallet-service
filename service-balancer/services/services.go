@@ -15,7 +15,7 @@ import (
 type Services struct  {
 	Dropped     chan int
 	Restarted   chan int
-	logname     string
+	logPrefix   string
 	servicePath string
 	config      *Config
 	all         []*service
@@ -176,31 +176,36 @@ func (svcs *Services) monitorService (svcIdx int, service *service) {
 			case <- aliveTimeout.C:
 				// No alive signals from service for some time. Usually this means
 				// that connection to the service has been lost and we need to restart it
-				log.Printf("%v %v, alive timeout", svcs.logname, svcIdx)
+				log.Printf("%v, alive timeout", service.logname)
 				service.Shutdown()
 
 			case <- service.serviceAlive:
 				// This means that alive ping has been received. Timeout timer should be restarted
 				if svcs.config.NoisyLogs {
-					log.Printf("%v %v, service is alive, restarting alive timeout", svcs.logname, svcIdx)
+					log.Printf("%v, service is alive, restarting alive timeout", service.logname)
 				}
 				aliveTimeout = time.NewTimer(svcs.config.AliveTimeout)
 
 			case <- service.serviceExit:
-				log.Printf("%v %v, unexpected shutdown [%v]", svcs.logname, svcIdx, service.command.ProcessState)
+				log.Printf("%v, unexpected shutdown [%v]", service.logname, service.command.ProcessState)
 
 				var relaunchJob = func () {
 					for {
-						if _, err := svcs.DropAndRelaunch(svcIdx); err != nil {
-							log.Printf("%v %v, failed to relaunch", svcs.logname, err)
-
-							if svcs.GetActiveCnt() == 0 {
-								log.Fatalf("no active services left, halting")
-								return
-							} else {
-								log.Printf("%v, will try to relaunch in %v", svcs.logname, svcs.config.AliveTimeout)
-							}
+						svc, err := svcs.DropAndRelaunch(svcIdx)
+						if err == nil {
+							// successfully relaunched, halt this job
+							log.Printf("%v, successfully relaunched", svc.logname)
+							return
 						}
+
+						log.Printf("%v %v, failed to relaunch: %v", svcs.logPrefix, svcIdx, err)
+						if svcs.GetActiveCnt() == 0 {
+							log.Fatalf("no active services left, halting")
+							return
+						} else {
+							log.Printf("%v %v, will try to relaunch in %v", svcs.logPrefix, svcIdx, svcs.config.AliveTimeout)
+						}
+
 						relaunch := time.NewTicker(svcs.config.AliveTimeout)
 						<- relaunch.C
 					}
@@ -223,7 +228,7 @@ func (svcs *Services) DropAndRelaunch (svcIdx int) (service *service, err error)
 	svcs.allMutex.Unlock()
 
 	// Can take a lot of time, so we do not lock
-	service, err = newService(svcs.config, svcIdx, svcs.getNextPort(), svcs.logname)
+	service, err = newService(svcs.config, svcIdx, svcs.getNextPort(), svcs.logPrefix)
 	if err != nil {
 		return
 	}
@@ -238,7 +243,7 @@ func (svcs *Services) DropAndRelaunch (svcIdx int) (service *service, err error)
 	return
 }
 
-func NewServices(cfg *Config, svcsCnt int, logname string) (result *Services, err error) {
+func NewServices(cfg *Config, svcsCnt int, logPrefix string) (result *Services, err error) {
 	defer func () {
 		if err != nil {
 			if result != nil {
@@ -254,12 +259,12 @@ func NewServices(cfg *Config, svcsCnt int, logname string) (result *Services, er
 		all:         make([]*service, svcsCnt),
 		servicePath: cfg.ServiceExePath,
 		nextPort:    cfg.FirstPort,
-		logname:     logname,
+		logPrefix:   logPrefix,
 		config:      cfg,
 	}
 
 	for idx := 0; idx < svcsCnt; idx++ {
-		service, launchErr := newService(cfg, idx, result.getNextPort(), logname)
+		service, launchErr := newService(cfg, idx, result.getNextPort(), logPrefix)
 
 		if launchErr != nil {
 			err = launchErr

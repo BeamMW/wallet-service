@@ -19,18 +19,20 @@ type service struct {
 	context      context.Context
 	serviceExit  chan struct{}
 	serviceAlive chan bool
+	logname      string
 }
 
 func (svc* service) Shutdown() {
 	svc.cancelCmd()
 }
 
-func newService(cfg *Config, index int, port int, logname string) (svc *service, err error) {
+func newService(cfg *Config, index int, port int, logPrefix string) (svc *service, err error) {
 	svc = &service{}
 
 	ctxWS, cancelWS := context.WithCancel(context.Background())
 	svc.cancelCmd    = cancelWS
 	svc.context      = ctxWS
+	svc.logname      = fmt.Sprintf("%v %v", logPrefix, index)
 	svc.command      = exec.CommandContext(ctxWS, cfg.ServiceExePath, "-n", cfg.BeamNodeAddress, "-p", strconv.Itoa(port))
 
 	var cliOptions = ""
@@ -84,11 +86,13 @@ func newService(cfg *Config, index int, port int, logname string) (svc *service,
 	}
 
 	// Start wallet service
-	log.Printf("%v %v, starting as [%v %v %v %v%v]", logname, index, cfg.ServiceExePath, "-n " + cfg.BeamNodeAddress, "-p", port, cliOptions)
+	log.Printf("%v, starting as [%v %v %v %v%v]", svc.logname, cfg.ServiceExePath, "-n " + cfg.BeamNodeAddress, "-p", port, cliOptions)
 	if err = svc.command.Start(); err != nil {
 		return
 	}
-	log.Printf("%v %v, pid is %v", logname, index, svc.command.Process.Pid)
+
+	log.Printf("%v, pid is %v", svc.logname, svc.command.Process.Pid)
+	svc.logname = fmt.Sprintf("%v %v-%v", logPrefix, index, svc.command.Process.Pid)
 
 	//
 	// Wait for the service spin-up & listening
@@ -96,21 +100,23 @@ func newService(cfg *Config, index int, port int, logname string) (svc *service,
 	presp, err := readPipe(startPipeR, cfg.StartTimeout)
 	if err != nil {
 		cancelWS()
-		err = fmt.Errorf("%v %v, failed to read from sync pipe, %v", logname, index, err)
+		err = fmt.Errorf("%v, failed to read from sync pipe, %v", svc.logname, err)
+		_ = svc.command.Wait() // avoid zombie
 		return
 	}
 
 	if "LISTENING" != presp {
 		cancelWS()
-		err = fmt.Errorf("%v %v, failed to start. Wrong pipe response %v", logname, index, presp)
+		err = fmt.Errorf("%v, failed to start. Wrong pipe response %v", svc.logname, presp)
+		_ = svc.command.Wait() // avoid zombie
 		return
 	}
 
-	// This goroutine waits for process exit
+	// This goroutine waits for the process exit
 	go func () {
 		_ = svc.command.Wait()
-		_ = alivePipeR.Close()
-		close(svc.serviceExit)
+		_ = alivePipeR.Close() // avoid zombie
+		close(svc.serviceExit) // notify
 	} ()
 
 	// This goroutine reads process heartbeat
@@ -119,7 +125,7 @@ func newService(cfg *Config, index int, port int, logname string) (svc *service,
 			_, err := readPipe(alivePipeR, cfg.HeartbeatTimeout)
 			if err != nil {
 				if cfg.Debug {
-					log.Printf("%v %v, aborting hearbeat pipe %v", logname, index, err)
+					log.Printf("%v, aborting hearbeat pipe %v", svc.logname, err)
 				}
 				return
 			}
@@ -127,7 +133,7 @@ func newService(cfg *Config, index int, port int, logname string) (svc *service,
 		}
 	} ()
 
-	log.Printf("%v %v, successfully started, sync pipe response %v", logname, index, presp)
+	log.Printf("%v, successfully started, sync pipe response %v", svc.logname, presp)
 	return
 }
 
