@@ -16,6 +16,12 @@
 #include "utils.h"
 #include "utility/logger.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <unistd.h>
+#endif
+
 namespace beam::wallet {
     unsigned days2sec(unsigned days)
     {
@@ -84,5 +90,14 @@ namespace beam::wallet {
     void logAlive(const std::string& name)
     {
         LOG_INFO() << "== Hey! " << name << " is sill alive ==";
+    }
+
+    unsigned getCurrentPID()
+    {
+        #ifdef _WIN32
+        return GetCurrentProcessId();
+        #else
+        return static_cast<unsigned>(getpid());
+        #endif
     }
 }

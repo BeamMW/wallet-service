@@ -21,5 +21,7 @@ namespace beam::wallet {
 
     unsigned getAliveLogInterval();
     void logAlive(const std::string& name);
+
+    unsigned getCurrentPID();
 }
 
