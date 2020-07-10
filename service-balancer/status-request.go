@@ -77,28 +77,43 @@ func collectStatus(fast bool) (status statusRes) {
 		status.SelfDiskUsage = DiskUsage("./")
 	}
 
-	wstats := walletServices.GetStats()
+	wstats  := walletServices.GetStats()
+	wsAlive := 0
+
 	if len(wstats) != 0 {
 		status.WalletServices = make([]*WalletStats, len(wstats))
 		for i, stat := range wstats {
 			full := WalletStats{}
-			full.Port = stat.Port
-			full.Pid = stat.Pid
-			full.Args = stat.Args
-			full.ProcessState = stat.ProcessState
 			full.EndpointsCnt, full.ClientsCnt = epoints.GetSvcCounts(i)
+
+			if stat != nil {
+				if stat.ProcessState == nil {
+					wsAlive++
+				}
+				full.Port = stat.Port
+				full.Pid = stat.Pid
+				full.Args = stat.Args
+				full.ProcessState = stat.ProcessState
+			}
+
 			status.WalletServices[i] = &full
 		}
 	}
 
+	sbbsAlive := 0
 	if sbbsServices != nil {
 		status.BbsServices = sbbsServices.GetStats()
+		for _, stat := range wstats {
+			if stat != nil && stat.ProcessState == nil {
+				sbbsAlive++
+			}
+		}
 	}
 
 	status.MaxWalletServices   = config.WalletServiceCnt
-	status.AliveWalletServices = len(status.WalletServices)
+	status.AliveWalletServices = wsAlive
 	status.MaxBbsServices      = config.BbsMonitorCnt
-	status.AliveBbsServices    = len(status.BbsServices)
+	status.AliveBbsServices    = sbbsAlive
 	status.BalancerVersion     = balancerVersion
 
 	// beam-common.cfg presence

@@ -82,16 +82,6 @@ func (cfg* Config) Read(fname string, m *melody.Melody) error {
 		return errors.New("config, missing WalletServicePath")
 	}
 
-	if cfg.WalletServiceFirstPort <= 0 {
-		return errors.New("config, invalid wallet serivce first port")
-	}
-
-	if  cfg.WalletServiceLastPort <= 0 ||
-		cfg.WalletServiceFirstPort > cfg.WalletServiceLastPort ||
-		cfg.WalletServiceFirstPort + runtime.NumCPU() > cfg.WalletServiceLastPort {
-		return errors.New("config, invalid wallet service last port")
-	}
-
 	if len(cfg.ServicePublicAddress) == 0 {
 		return errors.New("config, missing public address")
 	}
@@ -150,6 +140,16 @@ func (cfg* Config) Read(fname string, m *melody.Melody) error {
 		}
 	}
 
+	if cfg.WalletServiceFirstPort <= 0 {
+		return errors.New("config, invalid wallet serivce first port")
+	}
+
+	if  cfg.WalletServiceLastPort <= 0 ||
+		cfg.WalletServiceFirstPort > cfg.WalletServiceLastPort ||
+		cfg.WalletServiceFirstPort + cfg.WalletServiceCnt - 1 > cfg.WalletServiceLastPort {
+		return errors.New("config, invalid wallet service last port")
+	}
+
 	var mode = "RELEASE"
 	if cfg.Debug {
 		mode = "DEBUG"
@@ -162,7 +162,7 @@ func (cfg* Config) Read(fname string, m *melody.Melody) error {
 
 	if cfg.ActivityLogInterval == 0 {
 		if cfg.Debug {
-			cfg.ActivityLogInterval = time.Duration(5 * time.Second) //(1 * time.Minute)
+			cfg.ActivityLogInterval = time.Duration(1 * time.Minute)
 		} else {
 			cfg.ActivityLogInterval = time.Duration(10 * time.Minute)
 		}
