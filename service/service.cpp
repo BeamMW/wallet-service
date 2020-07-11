@@ -38,64 +38,26 @@ namespace
     public:
         WalletService(io::Reactor::Ptr reactor, bool withAssets, const io::Address &nodeAddr, uint16_t port,
                       const std::string &allowedOrigin, bool withPipes)
-                : WebSocketServer(reactor, port, allowedOrigin)
+                : WebSocketServer(reactor, port, "Wallet service", withPipes, allowedOrigin)
                 , _withAssets(withAssets)
-                , _withPipes(withPipes)
                 , _nodeAddr(nodeAddr)
                 , _reactor(std::move(reactor))
         {
-            std::string name = "WalletService";
-            LOG_INFO() << name << " alive log interval: " << msec2readable(getAliveLogInterval());
-            _aliveLogTimer = io::Timer::create(*_reactor);
-            _aliveLogTimer->start(getAliveLogInterval(), true, [name]() {
-                logAlive(name);
-            });
         }
 
         ~WalletService() = default;
 
     private:
-        void ioThread_onWSStart() override
-        {
-            if (_withPipes)
-            {
-                Pipe syncPipe(Pipe::SyncFileDescriptor);
-                syncPipe.notifyListening();
-
-                LOG_INFO() << "Wallet service heartbeat interval: " << msec2readable(Pipe::HeartbeatInterval);
-                _heartbeatPipe = std::make_unique<Pipe>(Pipe::HeartbeatFileDescriptor);
-                _heartbeatPipe->notifyAlive();
-
-                auto holder = std::make_shared<io::AsyncEvent::Ptr>();
-                *holder = io::AsyncEvent::create(*_reactor,
-                    [holder, this]() mutable
-                    {
-                        _heartbeatTimer = io::Timer::create(*_reactor);
-                        _heartbeatTimer->start(Pipe::HeartbeatInterval, true, [this]() {
-                            assert(_heartbeatPipe != nullptr);
-                            _heartbeatPipe->notifyAlive();
-                        });
-                        LOG_INFO () << "Wallet service heartbeat timer started";
-                        holder.reset();
-                    });
-                (*holder)->post();
-            }
-        }
-
         WebSocketServer::ClientHandler::Ptr ioThread_onNewWSClient(WebSocketServer::SendFunc wsSend) override
         {
             return std::make_unique<ServiceClientHandler>(_withAssets, _nodeAddr, _reactor, wsSend, _walletMap);
         }
 
     private:
-        io::Timer::Ptr _heartbeatTimer;
-        io::Timer::Ptr _aliveLogTimer;
-        std::unique_ptr<Pipe> _heartbeatPipe;
-        bool _withAssets;
-        bool _withPipes;
-        io::Address _nodeAddr;
-        io::Reactor::Ptr _reactor;
-        WalletMap _walletMap;
+        bool                  _withAssets;
+        io::Address           _nodeAddr;
+        io::Reactor::Ptr      _reactor;
+        WalletMap             _walletMap;
     };
 }
 

@@ -82,6 +82,8 @@ namespace beam::wallet {
                 *holder = io::AsyncEvent::create(*_reactor,
                     [holder, walletDB = std::move(_walletDB), wallet = std::move(_wallet)]() mutable
                     {
+                        wallet.reset();
+                        walletDB.reset();
                         holder.reset();
                     });
                 (*holder)->post();

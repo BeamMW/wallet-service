@@ -162,7 +162,7 @@ func (cfg* Config) Read(fname string, m *melody.Melody) error {
 
 	if cfg.ActivityLogInterval == 0 {
 		if cfg.Debug {
-			cfg.ActivityLogInterval = time.Duration(1 * time.Minute)
+			cfg.ActivityLogInterval = time.Duration(5 * time.Minute)
 		} else {
 			cfg.ActivityLogInterval = time.Duration(10 * time.Minute)
 		}

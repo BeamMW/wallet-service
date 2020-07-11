@@ -19,6 +19,8 @@
 #include <thread>
 #include <boost/asio/ip/tcp.hpp>
 #include "utility/io/reactor.h"
+#include "utility/io/timer.h"
+#include "pipe.h"
 
 namespace beam::wallet {
     class WebSocketServer
@@ -33,21 +35,26 @@ namespace beam::wallet {
             virtual ~ClientHandler() = default;
         };
 
-        WebSocketServer(io::Reactor::Ptr reactor, uint16_t port, std::string allowedOrigin = std::string());
+        WebSocketServer(io::Reactor::Ptr reactor, uint16_t port, std::string logPrefix, bool withPipes, std::string allowedOrigin);
         ~WebSocketServer();
 
     protected:
         //
         // ioThread callbacks are called in context of the IO Thread
         //
-        virtual void ioThread_onWSStart() = 0;
         virtual ClientHandler::Ptr ioThread_onNewWSClient(SendFunc) = 0;
 
-        io::Reactor::Ptr _reactor;
-
     private:
-        boost::asio::io_context _ioc;
-        std::shared_ptr<std::thread> _iocThread;
-        std::string _allowedOrigin;
+        void ioThread_onWSStart();
+
+        boost::asio::io_context       _ioc;
+        std::shared_ptr<std::thread>  _iocThread;
+        std::string                   _allowedOrigin;
+        io::Timer::Ptr                _aliveLogTimer;
+        std::unique_ptr<Pipe>         _heartbeatPipe;
+        io::Timer::Ptr                _heartbeatTimer;
+        std::atomic<bool>             _listening;
+        bool                          _withPipes;
+        std::string                   _logPrefix;
     };
 }
