@@ -30,7 +30,7 @@ func main () {
 	//
 	// Command line is OK
 	//
-	log.Println("starting wallet service balancer")
+	log.Println("starting wallet service balancer, version", balancerVersion)
 	log.Printf("cwd is %s", getCWD())
 
 	startCounters()
