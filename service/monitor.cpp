@@ -485,60 +485,20 @@ namespace
     {
     public:
         Server(Monitor& monitor, io::Reactor::Ptr reactor, uint16_t port, bool withPipes)
-            : WebSocketServer(reactor, port, "")
+            : WebSocketServer(reactor, port, "SBBS Monitor", withPipes, "")
             , _monitor(monitor)
-            , _reactor(std::move(reactor))
-            , _withPipes (withPipes)
         {
-            std::string name = "SBBS Monitor";
-            LOG_INFO() << name << " alive log interval: " << msec2readable(getAliveLogInterval());
-            _aliveLogTimer = io::Timer::create(*_reactor);
-            _aliveLogTimer->start(getAliveLogInterval(), true, [name]() {
-                logAlive(name);
-            });
         }
 
         ~Server() = default;
 
     private:
-        void ioThread_onWSStart() override
-        {
-            if (_withPipes)
-            {
-                Pipe syncPipe(Pipe::SyncFileDescriptor);
-                syncPipe.notifyListening();
-
-                LOG_INFO() << "SBBS monitor heartbeat interval: " << msec2readable(Pipe::HeartbeatInterval);
-                _heartbeatPipe = std::make_unique<Pipe>(Pipe::HeartbeatFileDescriptor);
-                _heartbeatPipe->notifyAlive();
-
-                auto holder = std::make_shared<io::AsyncEvent::Ptr>();
-                *holder = io::AsyncEvent::create(*_reactor,
-                    [holder, this]() mutable
-                    {
-                        _heartbeatTimer = io::Timer::create(*_reactor);
-                        _heartbeatTimer->start(Pipe::HeartbeatInterval, true, [this]() {
-                            assert(_heartbeatPipe != nullptr);
-                            _heartbeatPipe->notifyAlive();
-                        });
-                        LOG_INFO () << "SBBS monitor timer started";
-                        holder.reset();
-                    });
-                (*holder)->post();
-            }
-        }
-
         WebSocketServer::ClientHandler::Ptr ioThread_onNewWSClient(WebSocketServer::SendFunc wsSend) override
         {
             return std::make_unique<MonitorClientHandler>(_monitor, wsSend);
         }
 
         Monitor& _monitor;
-        io::Timer::Ptr _heartbeatTimer;
-        io::Timer::Ptr _aliveLogTimer;
-        std::unique_ptr<Pipe> _heartbeatPipe;
-        io::Reactor::Ptr _reactor;
-        bool _withPipes;
     };
 }
 

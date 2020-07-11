@@ -14,6 +14,7 @@
 #include "websocket_server.h"
 #include "sessions.h"
 #include "utility/logger.h"
+#include "utils.h"
 
 namespace beam::wallet
 {
@@ -115,27 +116,81 @@ namespace beam::wallet
         };
     }
 
-    WebSocketServer::WebSocketServer(io::Reactor::Ptr reactor, uint16_t port, std::string allowedOrigin)
-        : _reactor(std::move(reactor))
-        , _ioc(1)
+    WebSocketServer::WebSocketServer(io::Reactor::Ptr reactor, uint16_t port, std::string logPrefix, bool withPipes, std::string allowedOrigin)
+        : _ioc(1)
         , _allowedOrigin(std::move(allowedOrigin))
+        , _listening(false)
+        , _withPipes(withPipes)
+        , _logPrefix(logPrefix)
     {
-        _iocThread = std::make_shared<std::thread>([this, port](){
+        _iocThread = std::make_shared<std::thread>([this, port, reactor](){
             HandlerCreator creator = [this] (WebSocketServer::SendFunc func) -> auto {
                 return ioThread_onNewWSClient(std::move(func));
             };
-            std::make_shared<Listener>(_ioc, tcp::endpoint{ boost::asio::ip::make_address("0.0.0.0"), port }, _reactor, creator, _allowedOrigin)->run();
+            std::make_shared<Listener>(_ioc, tcp::endpoint{ boost::asio::ip::make_address("0.0.0.0"), port }, reactor, creator, _allowedOrigin)->run();
             ioThread_onWSStart();
             _ioc.run();
         });
+
+        LOG_INFO() << logPrefix << " alive log interval: " << msec2readable(getAliveLogInterval());
+        _aliveLogTimer = io::Timer::create(*reactor);
+        _aliveLogTimer->start(getAliveLogInterval(), true, []() {
+            logAlive("Wallet service");
+        });
+
+        if(_withPipes)
+        {
+            LOG_INFO() << _logPrefix << " heartbeat interval: " << msec2readable(Pipe::HeartbeatInterval);
+            _heartbeatTimer = io::Timer::create(*reactor);
+            _heartbeatTimer->start(Pipe::HeartbeatInterval, true, [this]() {
+                if (_listening.load())
+                {
+                    assert(_heartbeatPipe != nullptr);
+                    _heartbeatPipe->notifyAlive();
+                }
+            });
+        }
+    }
+
+    void WebSocketServer::ioThread_onWSStart()
+    {
+        if (_withPipes)
+        {
+            Pipe syncPipe(Pipe::SyncFileDescriptor);
+            syncPipe.notifyListening();
+
+            _heartbeatPipe = std::make_unique<Pipe>(Pipe::HeartbeatFileDescriptor);
+            _heartbeatPipe->notifyAlive();
+            _listening = true;
+        }
     }
 
     WebSocketServer::~WebSocketServer()
     {
+        _listening = false;
+
+        if (_heartbeatTimer) _heartbeatTimer->cancel();
+        if (_aliveLogTimer) _aliveLogTimer->cancel();
+
         _ioc.stop();
         if (_iocThread && _iocThread->joinable())
         {
             _iocThread->join();
         }
     }
+
+    /* May be we would need this in the future
+    void WebSocketServer::execAsync(const std::function<void(void)>& callback)
+    {
+        auto evtHolder = std::make_shared<io::AsyncEvent::Ptr>();
+        auto thisHolder = std::shared_ptr<WebSocketServer>(keepSelf ? shared_from_this() : nullptr);
+        *evtHolder = io::AsyncEvent::create(*_reactor, [evtHolder, thisHolder, callback]() mutable
+        {
+            callback();
+            evtHolder.reset();
+            thisHolder.reset();
+        });
+        (*evtHolder)->post();
+    }
+    */
 }
