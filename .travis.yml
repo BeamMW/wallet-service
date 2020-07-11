@@ -60,20 +60,15 @@ matrix:
         - SERVICE_ARCHIVE_LATEST=wallet-service$BEAM_TARGET_SUFFIX.tar.gz
         - SBBS_ARCHIVE=sbbs-monitor$BEAM_TARGET_SUFFIX-$PROJECT_VERSION.tar.gz
         - SBBS_ARCHIVE_LATEST=sbbs-monitor$BEAM_TARGET_SUFFIX.tar.gz
-        # --- changing -masternet to -testnet postfix ---
-        # --- remove this after moving to real testnet ---
-        - cd $SERVICE_PATH
-        - cp wallet-service-masternet wallet-service-testnet
-        - cp sbbs-monitor-masternet sbbs-monitor-testnet
-        - cd ${TRAVIS_BUILD_DIR}
-        # -----------------------------------------------
+        - cp ${TRAVIS_BUILD_DIR}/beam/beam-common.cfg $SERVICE_PATH/beam-common.cfg
         - echo $SERVICE_ARCHIVE
         - echo $SERVICE_PATH
-        - tar -cvzf $SERVICE_ARCHIVE --directory=$SERVICE_PATH wallet-service$BEAM_TARGET_SUFFIX
+        - echo "Service Path Content" && ls $SERVICE_PATH
+        - tar -cvzf $SERVICE_ARCHIVE --directory=$SERVICE_PATH wallet-service$BEAM_TARGET_SUFFIX beam-common.cfg
         - echo $SERVICE_ARCHIVE_LATEST
         - cp $SERVICE_ARCHIVE $SERVICE_ARCHIVE_LATEST
         - echo $SBBS_ARCHIVE
-        - tar -cvzf $SBBS_ARCHIVE --directory=$SERVICE_PATH sbbs-monitor$BEAM_TARGET_SUFFIX
+        - tar -cvzf $SBBS_ARCHIVE --directory=$SERVICE_PATH sbbs-monitor$BEAM_TARGET_SUFFIX beam-common.cfg
         - echo $SBBS_ARCHIVE_LATEST
         - cp $SBBS_ARCHIVE $SBBS_ARCHIVE_LATEST
         - echo "Created Archives" && ls *.tar.gz
@@ -146,9 +141,9 @@ matrix:
 ###############################################################################
 before_script:
   - curl -sL https://raw.githubusercontent.com/travis-ci/artifacts/master/install | bash
-  - BEAM_TARGET_SUFFIX="-testnet"
-  - BEAM_DISPLAY_SUFFIX="Testnet"
-  - BEAM_DISPLAY_SUFFIX2="-Testnet"
+  - BEAM_TARGET_SUFFIX="-masternet"
+  - BEAM_DISPLAY_SUFFIX="Masternet"
+  - BEAM_DISPLAY_SUFFIX2="-Masternet"
 
 notifications:
   email:
