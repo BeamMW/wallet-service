@@ -14,6 +14,8 @@
 #pragma once
 
 #include <string>
+#include <thread>
+#include <future>
 
 namespace beam::wallet {
     class Pipe
@@ -33,6 +35,20 @@ namespace beam::wallet {
         static const int SyncFileDescriptor;
         static const int HeartbeatFileDescriptor;
         static const int HeartbeatInterval;
+    };
 
+    class Heartbeat {
+    public:
+        Heartbeat() = default;
+        Heartbeat(const Heartbeat&) = delete;
+        ~Heartbeat();
+
+        void start();
+        void stop();
+
+    private:
+        std::unique_ptr<std::thread>  _thread;
+        std::unique_ptr<Pipe>         _pipe;
+        std::promise<void>            _exit;
     };
 }

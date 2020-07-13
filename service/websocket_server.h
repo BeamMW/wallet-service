@@ -51,9 +51,7 @@ namespace beam::wallet {
         std::shared_ptr<std::thread>  _iocThread;
         std::string                   _allowedOrigin;
         io::Timer::Ptr                _aliveLogTimer;
-        std::unique_ptr<Pipe>         _heartbeatPipe;
-        io::Timer::Ptr                _heartbeatTimer;
-        std::atomic<bool>             _listening;
+        Heartbeat                     _heartbeat;
         bool                          _withPipes;
         std::string                   _logPrefix;
     };

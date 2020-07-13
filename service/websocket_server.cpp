@@ -119,7 +119,6 @@ namespace beam::wallet
     WebSocketServer::WebSocketServer(io::Reactor::Ptr reactor, uint16_t port, std::string logPrefix, bool withPipes, std::string allowedOrigin)
         : _ioc(1)
         , _allowedOrigin(std::move(allowedOrigin))
-        , _listening(false)
         , _withPipes(withPipes)
         , _logPrefix(logPrefix)
     {
@@ -137,19 +136,6 @@ namespace beam::wallet
         _aliveLogTimer->start(getAliveLogInterval(), true, []() {
             logAlive("Wallet service");
         });
-
-        if(_withPipes)
-        {
-            LOG_INFO() << _logPrefix << " heartbeat interval: " << msec2readable(Pipe::HeartbeatInterval);
-            _heartbeatTimer = io::Timer::create(*reactor);
-            _heartbeatTimer->start(Pipe::HeartbeatInterval, true, [this]() {
-                if (_listening.load())
-                {
-                    assert(_heartbeatPipe != nullptr);
-                    _heartbeatPipe->notifyAlive();
-                }
-            });
-        }
     }
 
     void WebSocketServer::ioThread_onWSStart()
@@ -158,18 +144,13 @@ namespace beam::wallet
         {
             Pipe syncPipe(Pipe::SyncFileDescriptor);
             syncPipe.notifyListening();
-
-            _heartbeatPipe = std::make_unique<Pipe>(Pipe::HeartbeatFileDescriptor);
-            _heartbeatPipe->notifyAlive();
-            _listening = true;
+            _heartbeat.start();
         }
     }
 
     WebSocketServer::~WebSocketServer()
     {
-        _listening = false;
-
-        if (_heartbeatTimer) _heartbeatTimer->cancel();
+        _heartbeat.stop();
         if (_aliveLogTimer) _aliveLogTimer->cancel();
 
         _ioc.stop();
@@ -178,19 +159,4 @@ namespace beam::wallet
             _iocThread->join();
         }
     }
-
-    /* May be we would need this in the future
-    void WebSocketServer::execAsync(const std::function<void(void)>& callback)
-    {
-        auto evtHolder = std::make_shared<io::AsyncEvent::Ptr>();
-        auto thisHolder = std::shared_ptr<WebSocketServer>(keepSelf ? shared_from_this() : nullptr);
-        *evtHolder = io::AsyncEvent::create(*_reactor, [evtHolder, thisHolder, callback]() mutable
-        {
-            callback();
-            evtHolder.reset();
-            thisHolder.reset();
-        });
-        (*evtHolder)->post();
-    }
-    */
 }
