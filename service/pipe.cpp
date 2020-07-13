@@ -85,4 +85,35 @@ namespace beam::wallet {
     {
         notify("LISTENING", true);
     }
+
+    Heartbeat::~Heartbeat()
+    {
+        stop();
+    }
+
+    void Heartbeat::start()
+    {
+        assert(_pipe == nullptr && _thread == nullptr);
+        if (_pipe == nullptr && _thread == nullptr)
+        {
+            _pipe = std::make_unique<Pipe>(Pipe::HeartbeatFileDescriptor);
+            _pipe->notifyAlive();
+
+            _thread = std::make_unique<std::thread>([this, exit = _exit.get_future()]() {
+                const auto howlong = std::chrono::milliseconds(Pipe::HeartbeatInterval);
+                while(exit.wait_for(howlong) == std::future_status::timeout)
+                {
+                    _pipe->notifyAlive();
+                }
+            });
+        }
+    }
+
+    void Heartbeat::stop()
+    {
+        if (_thread) {
+            _exit.set_value();
+            _thread->join();
+        }
+    }
 }
