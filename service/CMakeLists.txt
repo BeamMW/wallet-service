@@ -46,6 +46,7 @@ target_link_libraries(${TARGET_NAME}
         http
         cli
         assets
+        SegFault
 )
 
 set(MONITOR_TARGET_NAME sbbs-monitor${BEAM_TARGET_SUFFIX})
