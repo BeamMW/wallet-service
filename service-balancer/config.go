@@ -78,6 +78,9 @@ func (cfg* Config) Read(fname string, m *melody.Melody) error {
 		return err
 	}
 
+	// FORCE DEBUG -- remove on release
+	cfg.Debug = true
+
 	if len(cfg.WalletServicePath) == 0 {
 		return errors.New("config, missing WalletServicePath")
 	}
