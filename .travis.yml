@@ -38,6 +38,7 @@ matrix:
         - eval "CC=gcc-7 && CXX=g++-7"
       env:
         - BUILD_TYPE=Release
+        - CMAKE_BUILD_TYPE=RelWithDebInfo
         - OS_FOLDER=linux
         - DATE=$(date +%Y.%m.%d)
         - SERVICE_PATH=$HOME/build/BeamMW/wallet-service/service
@@ -49,7 +50,7 @@ matrix:
         - cd beam
         - git apply 3rdparty/protobuf-patch.diff
         - cd ..
-        - cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DDEBUG_MESSAGES_IN_RELEASE_MODE=On -DBEAM_LINK_TYPE=Static -DBRANCH_NAME=$TRAVIS_BRANCH -DBEAM_HW_WALLET=Off .
+        - cmake -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE -DDEBUG_MESSAGES_IN_RELEASE_MODE=On -DBEAM_LINK_TYPE=Static -DBRANCH_NAME=$TRAVIS_BRANCH -DBEAM_HW_WALLET=Off .
         - make -j$(nproc)
         # extract build version
         - echo "Main Folder Content" && ls
