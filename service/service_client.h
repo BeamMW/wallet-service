@@ -19,6 +19,7 @@
 #include "websocket_server.h"
 #include "service_api.h"
 #include "keykeeper_proxy.h"
+#include "reactor.h"
 
 namespace beam::wallet {
     struct WalletInfo
@@ -37,26 +38,26 @@ namespace beam::wallet {
 
    using WalletMap = std::unordered_map<std::string, WalletInfo>;
 
-    class ServiceClientHandler
+    //
+    // This class must be always instantiated in context of the reactor thread
+    // All callbacks must be called in context of the reactor thread
+    // Must be destroyed in context of the reactor thread
+    //
+    class ServiceClient
         : public  WebSocketServer::ClientHandler  // We handle web socket client
         , public  IKeykeeperConnection            // We handle keykeeper connection via web socket
         , private WalletServiceApi               // We provide wallet service API
         , private WalletApiHandler::IWalletData  // We provide wallet data
     {
     public:
-        ServiceClientHandler(bool withAssets,
-                             const io::Address& nodeAddr,
-                             io::Reactor::Ptr reactor,
-                             WebSocketServer::SendFunc wsSend,
-                             WalletMap& walletMap);
-
-        ~ServiceClientHandler() noexcept override;
+        ServiceClient(bool withAssets,  const io::Address& nodeAddr, WebSocketServer::SendFunc wsSend, WalletMap& walletMap);
+        ~ServiceClient() noexcept override;
 
         //
         //  WebSocketServer::ClientHandler
         //  Functions that utilize web socket
         //
-        void onWSDataReceived(const std::string& data) override;
+        void ReactorThread_onWSDataReceived(const std::string& data) override;
         void serializeMsg(const json& msg) override;
         void socketSend(const std::string& data);
         void socketSend(const json& msg);
@@ -115,13 +116,12 @@ namespace beam::wallet {
         #endif  // BEAM_ATOMIC_SWAP_SUPPORT
 
     protected:
-        io::Reactor::Ptr _reactor;
         std::queue<KeyKeeperFunc> _keeperCallbacks;
-        IWalletDB::Ptr _walletDB;
-        Wallet::Ptr _wallet;
-        WalletMap& _walletMap;
-        io::Address _nodeAddr;
-        bool _withAssets;
+        IWalletDB::Ptr            _walletDB;
+        Wallet::Ptr               _wallet;
+        WalletMap&                _walletMap;
+        io::Address               _nodeAddr;
+        bool                      _withAssets;
         WebSocketServer::SendFunc _wsSend;
     };
 }

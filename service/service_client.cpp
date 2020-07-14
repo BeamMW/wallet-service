@@ -61,9 +61,8 @@ namespace beam::wallet {
         }
     }
 
-    ServiceClientHandler::ServiceClientHandler(bool withAssets, const io::Address& nodeAddr, io::Reactor::Ptr reactor, WebSocketServer::SendFunc wsSend, WalletMap& walletMap)
+    ServiceClient::ServiceClient(bool withAssets, const io::Address& nodeAddr, WebSocketServer::SendFunc wsSend, WalletMap& walletMap)
         : WalletServiceApi(static_cast<WalletApiHandler::IWalletData&>(*this))
-        , _reactor(std::move(reactor))
         , _walletMap(walletMap)
         , _nodeAddr(nodeAddr)
         , _withAssets(withAssets)
@@ -71,30 +70,11 @@ namespace beam::wallet {
     {
     }
 
-    ServiceClientHandler::~ServiceClientHandler() noexcept
+    ServiceClient::~ServiceClient() noexcept
     {
-        try
-        {
-            // _walletDB and _wallet should be destroyed in the context of _reactor
-            if (_walletDB || _wallet)
-            {
-                auto holder = std::make_shared<io::AsyncEvent::Ptr>();
-                *holder = io::AsyncEvent::create(*_reactor,
-                    [holder, walletDB = std::move(_walletDB), wallet = std::move(_wallet)]() mutable
-                    {
-                        wallet.reset();
-                        walletDB.reset();
-                        holder.reset();
-                    });
-                (*holder)->post();
-            }
-        }
-        catch (...)
-        {
-        }
     }
 
-    void ServiceClientHandler::onWSDataReceived(const std::string& data)
+    void ServiceClient::ReactorThread_onWSDataReceived(const std::string& data)
     {
         // Something came through websocket
         try
@@ -106,8 +86,10 @@ namespace beam::wallet {
                 if (_keeperCallbacks.empty())
                     return;
 
+                LOG_INFO() << "Keeper pop for id " << msg["id"] << ", method " << msg["method"];
                 _keeperCallbacks.front()(msg["result"]);
                 _keeperCallbacks.pop();
+                LOG_INFO() << "Keeper pop OK for id " << msg["id"] << ", method " << msg["method"];
             }
             else if (WalletApi::existsJsonParam(msg, "error"))
             {
@@ -126,17 +108,17 @@ namespace beam::wallet {
         }
     }
 
-    void ServiceClientHandler::serializeMsg(const json& msg)
+    void ServiceClient::serializeMsg(const json& msg)
     {
         socketSend(msg);
     }
 
-    void ServiceClientHandler::socketSend(const std::string& data)
+    void ServiceClient::socketSend(const std::string& data)
     {
         _wsSend(data);
     }
 
-    void ServiceClientHandler::socketSend(const json& msg)
+    void ServiceClient::socketSend(const json& msg)
     {
         socketSend(msg.dump());
 
@@ -158,7 +140,7 @@ namespace beam::wallet {
         }
     }
 
-    void ServiceClientHandler::onWalletApiMessage(const JsonRpcId& id, const CreateWallet& data)
+    void ServiceClient::onWalletApiMessage(const JsonRpcId& id, const CreateWallet& data)
     {
         try
         {
@@ -199,7 +181,7 @@ namespace beam::wallet {
         }
     }
 
-    void ServiceClientHandler::onWalletApiMessage(const JsonRpcId &id, const OpenWallet &data)
+    void ServiceClient::onWalletApiMessage(const JsonRpcId &id, const OpenWallet &data)
     {
         LOG_DEBUG() << "OpenWallet(id = " << id << ")";
 
@@ -294,19 +276,19 @@ namespace beam::wallet {
         }
     }
 
-    void ServiceClientHandler::onWalletApiMessage(const JsonRpcId& id, const wallet::Ping& data)
+    void ServiceClient::onWalletApiMessage(const JsonRpcId& id, const wallet::Ping& data)
     {
         LOG_DEBUG() << "Ping(id = " << id << ")";
         sendApiResponse(id, wallet::Ping::Response{});
     }
 
-    void ServiceClientHandler::onWalletApiMessage(const JsonRpcId& id, const Release& data)
+    void ServiceClient::onWalletApiMessage(const JsonRpcId& id, const Release& data)
     {
         LOG_DEBUG() << "Release(id = " << id << ")";
         sendApiResponse(id, Release::Response{});
     }
 
-    void ServiceClientHandler::onWalletApiMessage(const JsonRpcId& id, const CalcChange& data)
+    void ServiceClient::onWalletApiMessage(const JsonRpcId& id, const CalcChange& data)
     {
         LOG_DEBUG() << "CalcChange(id = " << id << ")";
 
@@ -321,14 +303,14 @@ namespace beam::wallet {
         sendApiResponse(id, CalcChange::Response{change});
     }
 
-    void ServiceClientHandler::onWalletApiMessage(const JsonRpcId& id, const ChangePassword& data)
+    void ServiceClient::onWalletApiMessage(const JsonRpcId& id, const ChangePassword& data)
     {
         LOG_DEBUG() << "ChangePassword(id = " << id << ")";
         _walletDB->changePassword(data.newPassword);
         sendApiResponse(id, ChangePassword::Response{ });
     }
 
-    IPrivateKeyKeeper2::Ptr ServiceClientHandler::createKeyKeeper(const std::string& pass, const std::string& ownerKey)
+    IPrivateKeyKeeper2::Ptr ServiceClient::createKeyKeeper(const std::string& pass, const std::string& ownerKey)
     {
         beam::KeyString ks;
 
@@ -344,14 +326,14 @@ namespace beam::wallet {
         return {};
     }
 
-    IPrivateKeyKeeper2::Ptr ServiceClientHandler::createKeyKeeperFromDB(const std::string& id, const std::string& pass)
+    IPrivateKeyKeeper2::Ptr ServiceClient::createKeyKeeperFromDB(const std::string& id, const std::string& pass)
     {
         auto walletDB = WalletDB::open(makeDBPath(id), SecString(pass));
         Key::IPKdf::Ptr pKey = walletDB->get_OwnerKdf();
         return createKeyKeeper(pKey);
     }
 
-    IPrivateKeyKeeper2::Ptr ServiceClientHandler::createKeyKeeper(Key::IPKdf::Ptr ownerKdf)
+    IPrivateKeyKeeper2::Ptr ServiceClient::createKeyKeeper(Key::IPKdf::Ptr ownerKdf)
     {
         return std::make_shared<WasmKeyKeeperProxy>(ownerKdf, *this);
     }

@@ -15,6 +15,7 @@
 #include "sessions.h"
 #include "utility/logger.h"
 #include "utils.h"
+#include "reactor.h"
 
 namespace beam::wallet
 {
@@ -24,7 +25,7 @@ namespace beam::wallet
         class Listener : public std::enable_shared_from_this<Listener>
         {
         public:
-            Listener(boost::asio::io_context& ioc, tcp::endpoint endpoint, io::Reactor::Ptr reactor, HandlerCreator creator, const std::string& allowedOrigin)
+            Listener(boost::asio::io_context& ioc, tcp::endpoint endpoint, SafeReactor::Ptr reactor, HandlerCreator creator, const std::string& allowedOrigin)
                 : m_acceptor(ioc)
                 , m_socket(ioc)
                 , m_reactor(std::move(reactor))
@@ -110,42 +111,43 @@ namespace beam::wallet
         private:
             tcp::acceptor m_acceptor;
             tcp::socket m_socket;
-            io::Reactor::Ptr m_reactor;
+            SafeReactor::Ptr m_reactor;
             HandlerCreator m_handlerCreator;
             std::string m_allowedOrigin;
         };
     }
 
-    WebSocketServer::WebSocketServer(io::Reactor::Ptr reactor, uint16_t port, std::string logPrefix, bool withPipes, std::string allowedOrigin)
+    WebSocketServer::WebSocketServer(SafeReactor::Ptr reactor, uint16_t port, std::string logPrefix, bool withPipes, std::string allowedOrigin)
         : _ioc(1)
         , _allowedOrigin(std::move(allowedOrigin))
-        , _withPipes(withPipes)
         , _logPrefix(logPrefix)
     {
-        _iocThread = std::make_shared<std::thread>([this, port, reactor](){
-            HandlerCreator creator = [this] (WebSocketServer::SendFunc func) -> auto {
-                return ioThread_onNewWSClient(std::move(func));
+        _iocThread = std::make_shared<std::thread>([this, port, reactor, withPipes]() {
+
+            HandlerCreator creator = [this, reactor] (WebSocketServer::SendFunc func) -> auto {
+                reactor->assert_thread();
+                return ReactorThread_onNewWSClient(std::move(func));
             };
-            std::make_shared<Listener>(_ioc, tcp::endpoint{ boost::asio::ip::make_address("0.0.0.0"), port }, reactor, creator, _allowedOrigin)->run();
-            ioThread_onWSStart();
+
+            std::make_shared<Listener>(_ioc,
+                    tcp::endpoint{ boost::asio::ip::make_address("0.0.0.0"), port },
+                    reactor, creator, _allowedOrigin)->run();
+
+            if (withPipes)
+            {
+                Pipe syncPipe(Pipe::SyncFileDescriptor);
+                syncPipe.notifyListening();
+                _heartbeat.start();
+            }
+
             _ioc.run();
         });
 
         LOG_INFO() << logPrefix << " alive log interval: " << msec2readable(getAliveLogInterval());
-        _aliveLogTimer = io::Timer::create(*reactor);
+        _aliveLogTimer = io::Timer::create(reactor->ref());
         _aliveLogTimer->start(getAliveLogInterval(), true, []() {
             logAlive("Wallet service");
         });
-    }
-
-    void WebSocketServer::ioThread_onWSStart()
-    {
-        if (_withPipes)
-        {
-            Pipe syncPipe(Pipe::SyncFileDescriptor);
-            syncPipe.notifyListening();
-            _heartbeat.start();
-        }
     }
 
     WebSocketServer::~WebSocketServer()

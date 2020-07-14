@@ -13,6 +13,7 @@
 // limitations under the License.
 #include "keykeeper_proxy.h"
 #include "wallet/api/api.h"
+#include "utility/logger.h"
 
 namespace beam::wallet {
     WasmKeyKeeperProxy::WasmKeyKeeperProxy(Key::IPKdf::Ptr ownerKdf, IKeykeeperConnection& connection)
@@ -23,6 +24,8 @@ namespace beam::wallet {
 
     WasmKeyKeeperProxy::Status::Type WasmKeyKeeperProxy::InvokeSync(Method::get_Kdf& x)
     {
+         LOG_DEBUG () << "KeeperProxy::[sync]-get_Kdf";
+
         if (x.m_Root)
         {
             assert(_ownerKdf);
@@ -34,6 +37,8 @@ namespace beam::wallet {
 
     void WasmKeyKeeperProxy::InvokeAsync(Method::get_Kdf& x, const Handler::Ptr& h)
     {
+        LOG_DEBUG () << "KeeperProxy::async-get_Kdf";
+
         json msg =
         {
             {WalletApi::JsonRpcHrd, WalletApi::JsonRpcVerHrd},
@@ -65,6 +70,8 @@ namespace beam::wallet {
 
     void WasmKeyKeeperProxy::InvokeAsync(Method::get_NumSlots& x, const Handler::Ptr& h)
     {
+        LOG_DEBUG () << "KeeperProxy::async-get_NumSlots";
+
         json msg =
         {
             {WalletApi::JsonRpcHrd, WalletApi::JsonRpcVerHrd},
@@ -85,6 +92,8 @@ namespace beam::wallet {
 
     void WasmKeyKeeperProxy::InvokeAsync(Method::CreateOutput& x, const Handler::Ptr& h)
     {
+        LOG_DEBUG () << "KeeperProxy::async-CreateOutput";
+
         json msg =
         {
             {WalletApi::JsonRpcHrd, WalletApi::JsonRpcVerHrd},
@@ -111,6 +120,8 @@ namespace beam::wallet {
 
     void WasmKeyKeeperProxy::InvokeAsync(Method::SignReceiver& x, const Handler::Ptr& h)
     {
+        LOG_DEBUG () << "KeeperProxy::async-SignReceiver";
+
         json msg =
         {
             {WalletApi::JsonRpcHrd, WalletApi::JsonRpcVerHrd},
@@ -141,6 +152,8 @@ namespace beam::wallet {
 
     void WasmKeyKeeperProxy::InvokeAsync(Method::SignSender& x, const Handler::Ptr& h)
     {
+        LOG_DEBUG () << "KeeperProxy::async-SignSender";
+
         json msg =
         {
             {WalletApi::JsonRpcHrd, WalletApi::JsonRpcVerHrd},
@@ -185,6 +198,8 @@ namespace beam::wallet {
 
     void WasmKeyKeeperProxy::InvokeAsync(Method::SignSplit& x, const Handler::Ptr& h)
     {
+        LOG_DEBUG () << "KeeperProxy::async-SignSplit";
+
         json msg =
         {
             {WalletApi::JsonRpcHrd, WalletApi::JsonRpcVerHrd},
@@ -213,12 +228,16 @@ namespace beam::wallet {
 
     void WasmKeyKeeperProxy::GetMutualResult(Method::TxMutual& x, const json& msg)
     {
+        LOG_DEBUG () << "KeeperProxy::GetMutualResult";
+
         x.m_PaymentProofSignature = from_base64<ECC::Signature>(msg["payment_proof_sig"]);
         GetCommonResult(x, msg);
     }
 
     void WasmKeyKeeperProxy::GetCommonResult(Method::TxCommon& x, const json& msg)
     {
+        LOG_DEBUG () << "KeeperProxy::GetCommonResult";
+
         auto offset = from_base64<ECC::Scalar>(msg["offset"]);
         x.m_kOffset.Import(offset);
         x.m_pKernel = from_base64<TxKernelStd::Ptr>(msg["kernel"]);

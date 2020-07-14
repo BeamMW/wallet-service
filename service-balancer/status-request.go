@@ -102,11 +102,20 @@ func collectStatus(fast bool) (status statusRes) {
 
 	sbbsAlive := 0
 	if sbbsServices != nil {
-		status.BbsServices = sbbsServices.GetStats()
-		for _, stat := range wstats {
-			if stat != nil && stat.ProcessState == nil {
-				sbbsAlive++
+		sbbsStats := sbbsServices.GetStats()
+		status.BbsServices =  make([] *services.ServiceStats, len(sbbsStats))
+		for i, stat := range sbbsStats {
+			full := services.ServiceStats{}
+			if stat != nil {
+				if stat.ProcessState == nil {
+					sbbsAlive++
+				}
+				full.Port = stat.Port
+				full.Pid = stat.Pid
+				full.Args = stat.Args
+				full.ProcessState = stat.ProcessState
 			}
+			status.BbsServices[i] = &full
 		}
 	}
 

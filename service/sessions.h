@@ -41,8 +41,8 @@ namespace beam::wallet {
     {
     public:
         // Take ownership of the socket
-        explicit WebsocketSession(tcp::socket socket, io::Reactor::Ptr reactor, const HandlerCreator& creator);
-        ~WebsocketSession() = default;
+        explicit WebsocketSession(tcp::socket socket, SafeReactor::Ptr reactor, HandlerCreator creator);
+        ~WebsocketSession();
 
         void run();
         void on_accept(boost::system::error_code ec);
@@ -67,11 +67,11 @@ namespace beam::wallet {
         websocket::stream<tcp::socket> _wsocket;
         boost::beast::multi_buffer _buffer;
 
-        io::AsyncEvent::Ptr _newDataEvent;
         WebSocketServer::ClientHandler::Ptr _handler;
+        SafeReactor::Ptr _reactor;
+        HandlerCreator _creator;
 
         std::mutex _queueMutex;
-        std::queue<std::string> _dataQueue;
         std::queue<std::string> _writeQueue;
     };
 
@@ -166,7 +166,7 @@ namespace beam::wallet {
 
     public:
         // Take ownership of the socket
-        HttpSession(tcp::socket&& socket, io::Reactor::Ptr reactor, HandlerCreator creator, std::string allowedOrigin);
+        HttpSession(tcp::socket&& socket, SafeReactor::Ptr reactor, HandlerCreator creator, std::string allowedOrigin);
         void run();
 
     private:
@@ -178,7 +178,7 @@ namespace beam::wallet {
         tcp::socket        _socket;
         Queue              _queue;
         beast::flat_buffer _buffer;
-        io::Reactor::Ptr   _reactor;
+        SafeReactor::Ptr   _reactor;
         HandlerCreator     _handlerCreator;
         std::string        _allowedOrigin;
         http::request<http::string_body> _request;

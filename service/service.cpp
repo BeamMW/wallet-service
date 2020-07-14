@@ -19,13 +19,14 @@
 #include "service.h"
 #include "service_client.h"
 #include "utils.h"
-#include "pipe.h"
 #include "version.h"
 #include "utility/cli/options.h"
 #include "utility/logger.h"
 #include "utility/log_rotation.h"
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
+#include <thread>
+#include "reactor.h"
 
 namespace
 {
@@ -36,28 +37,26 @@ namespace
         : public WebSocketServer
     {
     public:
-        WalletService(io::Reactor::Ptr reactor, bool withAssets, const io::Address &nodeAddr, uint16_t port,
+        WalletService(SafeReactor::Ptr reactor, bool withAssets, const io::Address &nodeAddr, uint16_t port,
                       const std::string &allowedOrigin, bool withPipes)
-                : WebSocketServer(reactor, port, "Wallet service", withPipes, allowedOrigin)
+                : WebSocketServer(std::move(reactor), port, "Wallet service", withPipes, allowedOrigin)
                 , _withAssets(withAssets)
                 , _nodeAddr(nodeAddr)
-                , _reactor(std::move(reactor))
         {
         }
 
         ~WalletService() = default;
 
     private:
-        WebSocketServer::ClientHandler::Ptr ioThread_onNewWSClient(WebSocketServer::SendFunc wsSend) override
+        WebSocketServer::ClientHandler::Ptr ReactorThread_onNewWSClient(WebSocketServer::SendFunc wsSend) override
         {
-            return std::make_unique<ServiceClientHandler>(_withAssets, _nodeAddr, _reactor, wsSend, _walletMap);
+            return std::make_shared<ServiceClient>(_withAssets, _nodeAddr,  wsSend, _walletMap);
         }
 
     private:
-        bool                  _withAssets;
-        io::Address           _nodeAddr;
-        io::Reactor::Ptr      _reactor;
-        WalletMap             _walletMap;
+        bool         _withAssets;
+        io::Address  _nodeAddr;
+        WalletMap    _walletMap;
     };
 }
 
@@ -147,17 +146,17 @@ int main(int argc, char* argv[])
             }
         }
 
-        io::Reactor::Ptr reactor = io::Reactor::create();
-        io::Reactor::Scope scope(*reactor);
-        io::Reactor::GracefulIntHandler gih(*reactor);
+        SafeReactor::Ptr safeReactor = SafeReactor::create();
+        io::Reactor::Scope scope(safeReactor->ref());
+        io::Reactor::GracefulIntHandler gih(safeReactor->ref());
 
         const unsigned LOG_ROTATION_PERIOD_SEC = 12 * 60 * 60; // in seconds, 12 hours
-        LogRotation logRotation(*reactor, LOG_ROTATION_PERIOD_SEC, beam::wallet::days2sec(options.logCleanupPeriod));
+        LogRotation logRotation(safeReactor->ref(), LOG_ROTATION_PERIOD_SEC, beam::wallet::days2sec(options.logCleanupPeriod));
         LOG_INFO() << "Log rotation: " <<  beam::wallet::sec2readable(LOG_ROTATION_PERIOD_SEC) << ". Log cleanup: " << options.logCleanupPeriod << " days.";
         LOG_INFO() << "Starting server on port " << options.port << ", sync pipes " << options.withPipes;
 
-        WalletService server(reactor, options.withAssets, node_addr, options.port, options.allowedOrigin, options.withPipes);
-        reactor->run();
+        WalletService server(safeReactor, options.withAssets, node_addr, options.port, options.allowedOrigin, options.withPipes);
+        safeReactor->ref().run();
 
         LOG_INFO() << "Done";
     }

@@ -21,6 +21,7 @@ add_executable(${TARGET_NAME}
     sessions.cpp
     service_client.cpp
     service_api.cpp
+    reactor.cpp
 )
 target_compile_definitions(${TARGET_NAME} PRIVATE _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS)
 
@@ -54,6 +55,7 @@ add_executable(${MONITOR_TARGET_NAME}
         utils.cpp
         node_connection.cpp
         sessions.cpp
+        reactor.cpp
         )
 
 target_include_directories(${MONITOR_TARGET_NAME} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})

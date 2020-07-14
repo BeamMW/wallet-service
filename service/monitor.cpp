@@ -24,6 +24,7 @@
 #include "pipe.h"
 #include "utils.h"
 #include "node_connection.h"
+#include "reactor.h"
 
 #include <memory>
 #include <unordered_map>
@@ -429,7 +430,7 @@ namespace
             sendAsync(msg);
         }
 
-        void onWSDataReceived(const std::string& data) override
+        void ReactorThread_onWSDataReceived(const std::string& data) override
         {
             try
             {
@@ -484,8 +485,8 @@ namespace
             : public wallet::WebSocketServer
     {
     public:
-        Server(Monitor& monitor, io::Reactor::Ptr reactor, uint16_t port, bool withPipes)
-            : WebSocketServer(reactor, port, "SBBS Monitor", withPipes, "")
+        Server(Monitor& monitor, SafeReactor::Ptr reactor, uint16_t port, bool withPipes)
+            : WebSocketServer(std::move(reactor), port, "SBBS Monitor", withPipes, "")
             , _monitor(monitor)
         {
         }
@@ -493,9 +494,9 @@ namespace
         ~Server() = default;
 
     private:
-        WebSocketServer::ClientHandler::Ptr ioThread_onNewWSClient(WebSocketServer::SendFunc wsSend) override
+        WebSocketServer::ClientHandler::Ptr ReactorThread_onNewWSClient(WebSocketServer::SendFunc wsSend) override
         {
-            return std::make_unique<MonitorClientHandler>(_monitor, wsSend);
+            return std::make_shared<MonitorClientHandler>(_monitor, wsSend);
         }
 
         Monitor& _monitor;
@@ -526,7 +527,7 @@ int main(int argc, char* argv[])
         } options;
 
         io::Address nodeAddress;
-        io::Reactor::Ptr reactor = io::Reactor::create();
+        SafeReactor::Ptr reactor = SafeReactor::create();
         {
             po::options_description desc("Wallet API general options");
             desc.add_options()
@@ -584,11 +585,11 @@ int main(int argc, char* argv[])
             }
         }
 
-        io::Reactor::Scope scope(*reactor);
-        io::Reactor::GracefulIntHandler gih(*reactor);
+        io::Reactor::Scope scope(reactor->ref());
+        io::Reactor::GracefulIntHandler gih(reactor->ref());
 
         const unsigned LOG_ROTATION_PERIOD_SEC = 12 * 60 * 60; // in seconds, 12 hours
-        LogRotation logRotation(*reactor, LOG_ROTATION_PERIOD_SEC, beam::wallet::days2sec(options.logCleanupPeriod));
+        LogRotation logRotation(reactor->ref(), LOG_ROTATION_PERIOD_SEC, beam::wallet::days2sec(options.logCleanupPeriod));
         LOG_INFO() << "Log rotation: " <<  beam::wallet::sec2readable(LOG_ROTATION_PERIOD_SEC) << ". Log cleanup: " << options.logCleanupPeriod << " days.";
         LOG_INFO() << "Starting server on port " << options.port << ", sync pipes " << options.withPipes;
         
@@ -603,7 +604,7 @@ int main(int argc, char* argv[])
         }
  
         Server server(monitor, reactor, options.port, options.withPipes);
-        reactor->run();
+        reactor->ref().run();
 
         LOG_INFO() << "Beam Wallet SBBS Monitor. Done.";
     }
