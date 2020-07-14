@@ -71,6 +71,7 @@ int main(int argc, char* argv[])
     const auto path = boost::filesystem::system_complete(LOG_FILES_DIR);
     const auto logPrefix = std::string(LOG_FILES_PREFIX) + std::to_string(getCurrentPID()) + std::string("_");
     auto logger = beam::Logger::create(LOG_LEVEL_DEBUG, LOG_LEVEL_DEBUG, LOG_LEVEL_DEBUG, logPrefix, path.string());
+    activateCrashLog();
 
     try
     {
