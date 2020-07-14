@@ -11,8 +11,8 @@ target_link_libraries(websocket
 
 target_compile_definitions(websocket PUBLIC _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS)
 
-set(TARGET_NAME wallet-service${BEAM_TARGET_SUFFIX})
-add_executable(${TARGET_NAME}
+set(SERVICE_TARGET_NAME wallet-service${BEAM_TARGET_SUFFIX})
+add_executable(${SERVICE_TARGET_NAME}
     service.cpp
     pipe.cpp
     utils.cpp
@@ -23,20 +23,20 @@ add_executable(${TARGET_NAME}
     service_api.cpp
     reactor.cpp
 )
-target_compile_definitions(${TARGET_NAME} PRIVATE _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS)
+target_compile_definitions(${SERVICE_TARGET_NAME} PRIVATE _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS)
 
 if(MSVC)
     # to avoid 4702 warning here, until another workaround will be found
     # const_buffer(const mutable_buffer& b) BOOST_ASIO_NOEXCEPT
     #    : data_(b.data()),
     target_compile_options(websocket PRIVATE "/wd4702")
-    target_compile_options(${TARGET_NAME} PRIVATE /bigobj)
-    target_compile_options(${TARGET_NAME} PRIVATE "/wd4996")
+    target_compile_options(${SERVICE_TARGET_NAME} PRIVATE /bigobj)
+    target_compile_options(${SERVICE_TARGET_NAME} PRIVATE "/wd4996")
 endif()
 
 configure_file("${PROJECT_SOURCE_DIR}/version.h.in" "${CMAKE_CURRENT_BINARY_DIR}/version.h")
-target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
-target_link_libraries(${TARGET_NAME}
+target_include_directories(${SERVICE_TARGET_NAME} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+target_link_libraries(${SERVICE_TARGET_NAME}
     PRIVATE
         beam
         utility
@@ -48,6 +48,13 @@ target_link_libraries(${TARGET_NAME}
         assets
         SegFault
 )
+
+if(NOT MSVC)
+    target_link_libraries(${SERVICE_TARGET_NAME}
+        PRIVATE
+            SegFault
+)
+endif()
 
 set(MONITOR_TARGET_NAME sbbs-monitor${BEAM_TARGET_SUFFIX})
 add_executable(${MONITOR_TARGET_NAME}
@@ -68,4 +75,12 @@ target_link_libraries(${MONITOR_TARGET_NAME}
        wallet
        utility
        cli
+       SegFault
 )
+
+if(NOT MSVC)
+    target_link_libraries(${MONITOR_TARGET_NAME}
+        PRIVATE
+            SegFault
+)
+endif()
