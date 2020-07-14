@@ -20,6 +20,8 @@
 #include <windows.h>
 #else
 #include <unistd.h>
+#include <execinfo.h>
+#include <csignal>
 #endif
 
 namespace beam::wallet {
@@ -100,4 +102,25 @@ namespace beam::wallet {
         return static_cast<unsigned>(getpid());
         #endif
     }
+
+    #ifdef _WIN32
+    void activateCrashLog () {
+    }
+    #else
+    void sigHandler (int sig) {
+        const size_t trCnt = 50;
+
+        void *array[trCnt];
+        size_t size = backtrace(array, trCnt);
+
+        fprintf(stderr, "Error: signal %d\n", sig);
+        fprintf(stderr, "Backtrace\n");
+        backtrace_symbols_fd(array, size, STDERR_FILENO);
+
+        exit(1);
+    }
+    void activateCrashLog () {
+        signal(SIGSEGV, sigHandler);
+    }
+    #endif
 }

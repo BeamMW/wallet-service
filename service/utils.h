@@ -23,5 +23,6 @@ namespace beam::wallet {
     void logAlive(const std::string& name);
 
     unsigned getCurrentPID();
+    void activateCrashLog();
 }
 
