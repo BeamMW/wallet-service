@@ -37,7 +37,7 @@ matrix:
         - export BOOST_ROOT="/usr/local/boost_1_69_0"
         - eval "CC=gcc-7 && CXX=g++-7"
       env:
-        - BUILD_TYPE=Release
+        - BUILD_TYPE=Debug
         - OS_FOLDER=linux
         - DATE=$(date +%Y.%m.%d)
         - SERVICE_PATH=$HOME/build/BeamMW/wallet-service/service
