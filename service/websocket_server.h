@@ -18,9 +18,9 @@
 #include <memory>
 #include <thread>
 #include <boost/asio/ip/tcp.hpp>
-#include "utility/io/reactor.h"
-#include "utility/io/timer.h"
 #include "pipe.h"
+#include "reactor.h"
+#include "utility/io/timer.h"
 
 namespace beam::wallet {
     class WebSocketServer
@@ -30,29 +30,23 @@ namespace beam::wallet {
 
         struct ClientHandler
         {
-            using Ptr = std::unique_ptr<ClientHandler>;
-            virtual void onWSDataReceived(const std::string&) = 0;
+            using Ptr = std::shared_ptr<ClientHandler>;
+            virtual void ReactorThread_onWSDataReceived(const std::string&) = 0;
             virtual ~ClientHandler() = default;
         };
 
-        WebSocketServer(io::Reactor::Ptr reactor, uint16_t port, std::string logPrefix, bool withPipes, std::string allowedOrigin);
+        WebSocketServer(SafeReactor::Ptr reactor, uint16_t port, std::string logPrefix, bool withPipes, std::string allowedOrigin);
         ~WebSocketServer();
 
     protected:
-        //
-        // ioThread callbacks are called in context of the IO Thread
-        //
-        virtual ClientHandler::Ptr ioThread_onNewWSClient(SendFunc) = 0;
+        virtual ClientHandler::Ptr ReactorThread_onNewWSClient(SendFunc) = 0;
 
     private:
-        void ioThread_onWSStart();
-
         boost::asio::io_context       _ioc;
         std::shared_ptr<std::thread>  _iocThread;
         std::string                   _allowedOrigin;
         io::Timer::Ptr                _aliveLogTimer;
         Heartbeat                     _heartbeat;
-        bool                          _withPipes;
         std::string                   _logPrefix;
     };
 }

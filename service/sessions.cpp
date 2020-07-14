@@ -13,7 +13,6 @@
 // limitations under the License.
 #include "sessions.h"
 #include "utility/logger.h"
-//#include <boost/beast/core/make_printable.hpp>
 
 namespace beam::wallet {
     void fail(boost::system::error_code ec, char const* what)
@@ -32,25 +31,50 @@ namespace beam::wallet {
     // WebSocket Session
     //
     //
-    WebsocketSession::WebsocketSession(tcp::socket socket, io::Reactor::Ptr reactor, const HandlerCreator& creator)
+    WebsocketSession::WebsocketSession(tcp::socket socket, SafeReactor::Ptr reactor,  HandlerCreator creator)
         : _wsocket(std::move(socket))
+        , _reactor(std::move(reactor))
+        , _creator(std::move(creator))
     {
-        _handler = creator([this] (const std::string& data) {
-            do_write(data);
-        });
+    }
 
-        _newDataEvent = io::AsyncEvent::create(*reactor, [this]() {
-            while (true)
+    WebsocketSession::~WebsocketSession()
+    {
+        // Client handler must be destroyed in the Loop thread
+        // Transfer ownership and register destroy request
+        _reactor->callAsync([handler = std::move(_handler)] () mutable {
+            handler.reset();
+        });
+    }
+
+    void WebsocketSession::process_data_async(std::string&& data)
+    {
+        //
+        // We do not use shared_ptr here cause
+        // 1) there will be deadlock, session would be never destroyed and kept by reactor forever
+        // 2) session is destroyed in case of error/socket close. There will be no chance to send
+        //    any response in this case anyway
+        //
+        std::weak_ptr<WebsocketSession> wp = shared_from_this();
+        _reactor->callAsync([data, creator = _creator, wp]() {
+            if(auto sp = wp.lock())
             {
-                std::string data;
+                if (!sp->_handler)
                 {
-                    std::unique_lock<std::mutex> lock(_queueMutex);
-                    if (_dataQueue.empty())
-                        return;
-                    data = _dataQueue.front();
-                    _dataQueue.pop();
+                    // Client handler must be created in the Loop thread
+                    // It is safe to do without any locks cause
+                    // all these callbacks would be executed sequentially
+                    // in the context of the same thread. So if one creates handler
+                    // the next would discover it and skip.
+                    // There would be no race conditions as well
+                    sp->_handler = creator([wp](const std::string &data) {
+                        if (auto sp = wp.lock())
+                        {
+                            sp->do_write(data);
+                        }
+                    });
                 }
-                _handler->onWSDataReceived(data);
+                sp->_handler->ReactorThread_onWSDataReceived(data);
             }
         });
     }
@@ -112,15 +136,6 @@ namespace beam::wallet {
         do_read();
     }
 
-    void WebsocketSession::process_data_async(std::string&& data)
-    {
-        {
-            std::unique_lock<std::mutex> lock(_queueMutex);
-            _dataQueue.push(std::move(data));
-        }
-        _newDataEvent->post();
-    }
-
     void WebsocketSession::do_write(const std::string &msg)
     {
         std::string* contents = nullptr;
@@ -170,13 +185,12 @@ namespace beam::wallet {
         }
     }
 
-
     //
     //
     //  HTTP Session
     //
     //
-    HttpSession::HttpSession(boost::asio::ip::tcp::socket&& socket, io::Reactor::Ptr reactor, HandlerCreator creator, std::string allowedOrigin)
+    HttpSession::HttpSession(boost::asio::ip::tcp::socket&& socket, SafeReactor::Ptr reactor, HandlerCreator creator, std::string allowedOrigin)
         : _socket(std::move(socket))
         , _queue(*this)
         , _reactor(std::move(reactor))
@@ -249,11 +263,11 @@ namespace beam::wallet {
         if (close)
         {
             // This means we should close the connection, usually because
-            // the response indicated the "Connection: close" semantic.
+            // the response indicated the "Connection: close" semantic
             return do_close();
         }
 
-        // Inform the queue that a write completed
+        // Inform the queue that the write operation is completed
         if (_queue.on_write())
         {
             // Read another request

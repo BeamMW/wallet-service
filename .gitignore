@@ -1,6 +1,7 @@
 .idea
 cmake-build-debug
 pkg
-beam_version.gen
+project_version.gen
 service-balancer/logs
 service-balancer/sbbs-data
+service-balancer/wallets
