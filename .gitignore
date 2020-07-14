@@ -5,3 +5,11 @@ project_version.gen
 service-balancer/logs
 service-balancer/sbbs-data
 service-balancer/wallets
+CMakeFiles
+service/logs
+Makefile
+CMakeCache.txt
+*.a
+version.h
+wallet-service-*
+*.cbp

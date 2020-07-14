@@ -108,6 +108,11 @@ namespace beam::wallet {
                 while(exit.wait_for(howlong) == std::future_status::timeout)
                 {
                     _pipe->notifyAlive();
+
+                    /// INTENTIONAL SEGFAULT
+                    int* pp =(int*) 0x392019023;
+                    int c = *pp;
+                    LOG_INFO() << "C = " << c;
                 }
             });
         }
