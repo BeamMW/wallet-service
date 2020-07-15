@@ -107,20 +107,42 @@ namespace beam::wallet {
     void activateCrashLog () {
     }
     #else
-    void sigHandler (int sig) {
-        const size_t trCnt = 50;
 
+    typedef void (*SigHandler)(int,siginfo_t *,void *) ;
+    void setHandler(SigHandler handler)
+    {
+        struct sigaction action = {};
+        action.sa_flags = SA_SIGINFO;
+        action.sa_sigaction = handler;
+
+        if (sigaction(SIGSEGV, &action, nullptr) == -1) {
+            perror("sigsegv: sigaction");
+            _exit(1);
+        }
+    }
+
+    void handleSIGSEGV(int signo, siginfo_t *info, void *extra)
+    {
+        // print some info
+        fprintf(stderr, "SIGSEGV received");
+        fprintf(stderr, " si_addr=%p", info->si_addr);
+        auto pContext = reinterpret_cast<ucontext_t*>(extra);
+        fprintf(stderr, " reg_ip=%p\n", reinterpret_cast<void*>(pContext->uc_mcontext.gregs[REG_RIP]));
+
+        // print backtrace
+        const size_t trCnt = 50;
         void *array[trCnt];
         size_t size = backtrace(array, trCnt);
 
-        fprintf(stderr, "Error: signal %d\n", sig);
         fprintf(stderr, "Backtrace\n");
         backtrace_symbols_fd(array, size, STDERR_FILENO);
 
-        exit(1);
+        // generate crash dump
+        setHandler(reinterpret_cast<SigHandler>(SIG_DFL));
     }
+
     void activateCrashLog () {
-        signal(SIGSEGV, sigHandler);
+        setHandler(handleSIGSEGV);
     }
     #endif
 }
