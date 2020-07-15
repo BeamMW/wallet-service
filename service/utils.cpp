@@ -119,12 +119,17 @@ namespace beam::wallet {
             perror("sigsegv: sigaction");
             _exit(1);
         }
+
+        if (sigaction(SIGABRT, &action, nullptr) == -1) {
+            perror("sigabrt: sigaction");
+            _exit(1);
+        }
     }
 
-    void handleSIGSEGV(int signo, siginfo_t *info, void *extra)
+    void handleSIGS(int signo, siginfo_t *info, void *extra)
     {
         // print some info
-        fprintf(stderr, "SIGSEGV received");
+        fprintf(stderr, "Sig %d received", signo);
         fprintf(stderr, " si_addr=%p", info->si_addr);
         auto pContext = reinterpret_cast<ucontext_t*>(extra);
         fprintf(stderr, " reg_ip=%p\n", reinterpret_cast<void*>(pContext->uc_mcontext.gregs[REG_RIP]));
@@ -142,7 +147,7 @@ namespace beam::wallet {
     }
 
     void activateCrashLog () {
-        setHandler(handleSIGSEGV);
+        setHandler(handleSIGS);
     }
     #endif
 }
