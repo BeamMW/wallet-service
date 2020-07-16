@@ -4,6 +4,7 @@ cmake_policy(SET CMP0074 NEW)
 # should be before project and git
 set(BEAM_WALLET_CLIENT_LIBRARY FALSE)
 set(BEAM_TESTS_ENABLED FALSE)
+set(BEAM_ATOMIC_SWAP_SUPPORT OFF)
 add_subdirectory(beam)
 
 find_package(Git)

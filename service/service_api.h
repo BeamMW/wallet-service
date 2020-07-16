@@ -100,9 +100,5 @@ namespace beam::wallet {
         void on##api##Message(const JsonRpcId& id, const json& msg);
         WALLET_SERVICE_API_METHODS(MESSAGE_FUNC)
         #undef MESSAGE_FUNC
-
-        // TODO: add throttling
-        // unsigned _createCnt = 0;
-        // const unsigned _createLimit = 1;
     };
 }
