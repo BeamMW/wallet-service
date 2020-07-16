@@ -17,6 +17,7 @@
 #include "node_connection.h"
 #include <boost/filesystem.hpp>
 #include <boost/uuid/uuid_generators.hpp>
+#include "utils.h"
 
 namespace beam::wallet {
     namespace {
@@ -142,6 +143,10 @@ namespace beam::wallet {
 
     void ServiceClient::onWalletApiMessage(const JsonRpcId& id, const CreateWallet& data)
     {
+        if (_created) {
+            return WalletServiceApi::doError(id, ApiError::ThrottleError, "Wallet has been created in this session. Reconnect and try again");
+        }
+
         try
         {
             LOG_DEBUG() << "CreateWallet(id = " << id << ")";
@@ -169,6 +174,7 @@ namespace beam::wallet {
                     walletDB->saveAddress(address);
 
                     sendApiResponse(id, CreateWallet::Response{dbName});
+                    _created = true;
                     return;
                 }
             }
@@ -183,44 +189,71 @@ namespace beam::wallet {
 
     void ServiceClient::onWalletApiMessage(const JsonRpcId &id, const OpenWallet &data)
     {
-        LOG_DEBUG() << "OpenWallet(id = " << id << ")";
+        if (_wallet) {
+            return WalletServiceApi::doError(id, ApiError::InternalErrorJsonRpc, "Database already opened");
+        }
+
+        if (_opening) {
+            return WalletServiceApi::doError(id, ApiError::InternalErrorJsonRpc, "Open operation is already pending");
+        }
+
+        OnUntilExit guard(_opening);
 
         try
         {
-            const auto openWallet = [&]() {
-                _walletDB = WalletDB::open(makeDBPath(data.id), SecString(data.pass), createKeyKeeperFromDB(data.id, data.pass));
-                _wallet = std::make_shared<Wallet>(_walletDB, _withAssets);
-            };
+            std::shared_ptr<Wallet> wallet;
+            std::shared_ptr<IWalletDB> walletDB;
 
             auto it = _walletMap.find(data.id);
-            if (it == _walletMap.end())
+            if (it != _walletMap.end())
             {
-                openWallet();
-            }
-            else if (auto wdb = it->second.walletDB.lock(); wdb)
-            {
-                _walletDB = wdb;
-                _wallet = it->second.wallet.lock();
-            }
-            else
-            {
-                openWallet();
+                wallet = it->second.wallet.lock();
+                if (wallet)
+                {
+                    if (data.freshKeeper)
+                    {
+                        // TODO: support multiple keykeepers OR support close of other sessions
+                        return WalletServiceApi::doError(id, ApiError::InternalErrorJsonRpc, "Wallet is opened in another session.");
+                    }
+
+                    // this should always succeed, wallet keeps db
+                    walletDB = it->second.walletDB.lock();
+                    assert(walletDB != nullptr);
+                }
             }
 
-            if (!_walletDB)
-            {
-                WalletServiceApi::doError(id, ApiError::InternalErrorJsonRpc, "Wallet not opened.");
-                return;
+            // throws on error
+            auto keeper = createKeyKeeperFromDB(data.id, data.pass);
+
+            // just in case somebody forgets to throw
+            if (!keeper) {
+                assert(false);
+                return WalletServiceApi::doError(id, ApiError::InternalErrorJsonRpc, "Failed to create keykeeper");
             }
 
-            _walletMap[data.id].walletDB = _walletDB;
-            _walletMap[data.id].wallet = _wallet;
-            LOG_DEBUG() << "Wallet sucessfully opened, wallet id " << data.id;
+            // open throws on error
+            // open can initiate async communication via socket (to get kdfs) and block until operation completes
+            walletDB = WalletDB::open(makeDBPath(data.id), SecString(data.pass), keeper);
 
-            _wallet->ResumeAllTransactions();
+            // just in case somebody forgets to throw
+            if (!walletDB) {
+                assert(false);
+                return WalletServiceApi::doError(id, ApiError::InternalErrorJsonRpc, "Failed to open database");
+            }
+
+            // throws on error
+            wallet  = std::make_shared<Wallet>(walletDB, _withAssets);
+
+            // just in case somebody forgets to throw
+            if (!wallet) {
+                assert(false);
+                return WalletServiceApi::doError(id, ApiError::InternalErrorJsonRpc, "Failed to create wallet");
+            }
+
+            wallet->ResumeAllTransactions();
             if (data.freshKeeper) {
-                // We won't be able to sign, nonces are regenerated
-                _wallet->VisitActiveTransaction([&](const TxID& txid, BaseTransaction::Ptr tx) {
+                // We won't be able to sign with the fresh keykeeper, nonces are regenerated
+                wallet->VisitActiveTransaction([&](const TxID& txid, BaseTransaction::Ptr tx) {
                    if (tx->GetType() == TxType::Simple)
                    {
                        SimpleTransaction::State state = SimpleTransaction::State::Initial;
@@ -229,7 +262,7 @@ namespace beam::wallet {
                            if (state < SimpleTransaction::State::Registration)
                            {
                                LOG_DEBUG() << "Fresh keykeeper transaction cancel, txid " << txid << " , state " << state;
-                               _wallet->CancelTransaction(txid);
+                               wallet->CancelTransaction(txid);
                            }
                        }
                    }
@@ -249,6 +282,7 @@ namespace beam::wallet {
                                << timeout_ms << " ms";
                 }
             }
+
             uint32_t responceTime_s = Rules::get().DA.Target_s * wallet::kDefaultTxResponseTime;
             if (nnet->m_Cfg.m_PollPeriod_ms >= responceTime_s * 1000)
             {
@@ -258,21 +292,26 @@ namespace beam::wallet {
             nnet->m_Cfg.m_vNodes.push_back(_nodeAddr);
             nnet->Connect();
 
-            auto wnet = std::make_shared<WalletNetworkViaBbs>(*_wallet, nnet, _walletDB);
-            _wallet->AddMessageEndpoint(wnet);
-            _wallet->SetNodeEndpoint(nnet);
+            auto wnet = std::make_shared<WalletNetworkViaBbs>(*wallet, nnet, walletDB);
+            wallet->AddMessageEndpoint(wnet);
+            wallet->SetNodeEndpoint(nnet);
 
-            // !TODO: not sure, do we need this id in the future
+            LOG_DEBUG() << "Wallet successfully opened, wallet id " << data.id;
+            _wallet = wallet;
+            _walletDB = walletDB;
+            _walletMap[data.id].walletDB = _walletDB; // weak ref
+            _walletMap[data.id].wallet = _wallet; // weak ref
+
             auto session = generateUid();
             sendApiResponse(id, OpenWallet::Response{session});
         }
         catch(const DatabaseNotFoundException& ex)
         {
-            WalletServiceApi::doError(id, ApiError::DatabaseNotFound, ex.what());
+            return WalletServiceApi::doError(id, ApiError::DatabaseNotFound, ex.what());
         }
         catch(const DatabaseException& ex)
         {
-            WalletServiceApi::doError(id, ApiError::DatabaseError, ex.what());
+            return WalletServiceApi::doError(id, ApiError::DatabaseError, ex.what());
         }
     }
 
@@ -291,6 +330,9 @@ namespace beam::wallet {
     void ServiceClient::onWalletApiMessage(const JsonRpcId& id, const CalcChange& data)
     {
         LOG_DEBUG() << "CalcChange(id = " << id << ")";
+        if (!_walletDB) {
+            return doError(id, ApiError::NotOpenedError);
+        }
 
         auto coins = _walletDB->selectCoins(data.amount, Zero);
         Amount sum = 0;
@@ -306,6 +348,9 @@ namespace beam::wallet {
     void ServiceClient::onWalletApiMessage(const JsonRpcId& id, const ChangePassword& data)
     {
         LOG_DEBUG() << "ChangePassword(id = " << id << ")";
+        if (!_walletDB) {
+            return doError(id, ApiError::NotOpenedError);
+        }
         _walletDB->changePassword(data.newPassword);
         sendApiResponse(id, ChangePassword::Response{ });
     }

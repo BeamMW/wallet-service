@@ -95,16 +95,14 @@ namespace beam::wallet {
         //
         // WalletApiHandler::IWalletData methods
         //
-        IWalletDB::Ptr getWalletDB() override
+        IWalletDB::Ptr getWalletDBPtr() override
         {
-            assert(_walletDB);
             return _walletDB;
         }
 
-        Wallet& getWallet() override
+        Wallet::Ptr getWalletPtr() override
         {
-            assert(_wallet);
-            return *_wallet;
+            return _wallet;
         }
 
         #ifdef BEAM_ATOMIC_SWAP_SUPPORT
@@ -123,5 +121,7 @@ namespace beam::wallet {
         io::Address               _nodeAddr;
         bool                      _withAssets;
         WebSocketServer::SendFunc _wsSend;
+        bool                      _opening = false;
+        bool                      _created = false;
     };
 }

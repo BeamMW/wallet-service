@@ -24,5 +24,19 @@ namespace beam::wallet {
 
     unsigned getCurrentPID();
     void activateCrashLog();
-}
 
+    class OnUntilExit {
+    public:
+        explicit  OnUntilExit(bool& ref)
+        : _ref (ref) {
+            _ref = true;
+        }
+
+        ~OnUntilExit() {
+            _ref = false;
+        }
+
+    private:
+        bool& _ref;
+    };
+}

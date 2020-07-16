@@ -28,6 +28,15 @@
 #include <thread>
 #include "reactor.h"
 
+#ifdef BEAM_ATOMIC_SWAP_SUPPORT
+// IWallet data has the following method
+// virtual const IAtomicSwapProvider& getAtomicSwapProvider() const = 0;
+// Its implementation would throw. If you're going to implement it notice
+// that any API method can be invoked before open_wallet/create_wallet while
+// wallet still does not exists/not opened. Consider refactoring to ::Ptr if necessary
+#error "Atomic swaps are not supported in the wallet service"
+#endif  // BEAM_ATOMIC_SWAP_SUPPORT
+
 namespace
 {
     using namespace beam;

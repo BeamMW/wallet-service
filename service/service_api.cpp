@@ -14,7 +14,8 @@
 #include "service_api.h"
 
 namespace beam::wallet {
-    WalletServiceApi::WalletServiceApi(IWalletData& walletData)
+
+     WalletServiceApi::WalletServiceApi(IWalletData& walletData)
         // assets are forcibly disabled in wallet service
         // no ACL in wallet service
         : WalletApi(*this, false, boost::none)
@@ -28,13 +29,7 @@ namespace beam::wallet {
 
     void WalletServiceApi::onCreateWalletMessage(const JsonRpcId& id, const nlohmann::json& params)
     {
-        // TODO: throttling
-        // if (_createCnt++ >= _createLimit) {
-        //    throw jsonrpc_exception { ApiError::ThrottleError, "" , id };
-        // }
-
         CreateWallet createWallet;
-
         if (existsJsonParam(params, "pass"))
         {
             createWallet.pass = params["pass"].get<std::string>();
