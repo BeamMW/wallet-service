@@ -20,6 +20,7 @@
 #include "service_api.h"
 #include "keykeeper_proxy.h"
 #include "reactor.h"
+#include "utility/logger.h"
 
 namespace beam::wallet {
     struct WalletInfo
@@ -48,6 +49,7 @@ namespace beam::wallet {
         , public  IKeykeeperConnection            // We handle keykeeper connection via web socket
         , private WalletServiceApi               // We provide wallet service API
         , private WalletApiHandler::IWalletData  // We provide wallet data
+        , public std::enable_shared_from_this<ServiceClient>
     {
     public:
         ServiceClient(bool withAssets,  const io::Address& nodeAddr, WebSocketServer::SendFunc wsSend, WalletMap& walletMap);
@@ -88,10 +90,6 @@ namespace beam::wallet {
             socketSend(msg);
         }
 
-        IPrivateKeyKeeper2::Ptr createKeyKeeper(const std::string& pass, const std::string& ownerKey);
-        IPrivateKeyKeeper2::Ptr createKeyKeeperFromDB(const std::string& id, const std::string& pass);
-        IPrivateKeyKeeper2::Ptr createKeyKeeper(Key::IPKdf::Ptr ownerKdf);
-
         //
         // WalletApiHandler::IWalletData methods
         //
@@ -113,7 +111,7 @@ namespace beam::wallet {
         }
         #endif  // BEAM_ATOMIC_SWAP_SUPPORT
 
-    protected:
+    private:
         std::queue<KeyKeeperFunc> _keeperCallbacks;
         IWalletDB::Ptr            _walletDB;
         Wallet::Ptr               _wallet;
@@ -122,6 +120,12 @@ namespace beam::wallet {
         bool                      _withAssets;
         WebSocketServer::SendFunc _wsSend;
         bool                      _opening = false;
-        bool                      _created = false;
+
+        using OptionalError = boost::optional<std::runtime_error>;
+        using KeeperCompletion = std::function<void (IPrivateKeyKeeper2::Ptr, OptionalError)>;
+
+        IPrivateKeyKeeper2::Ptr createKeyKeeper(const std::string& pass, const std::string& ownerKey);
+        void createKeyKeeperFromDB(const std::string& id, const std::string& pass, const KeeperCompletion&) noexcept ;
+        void createKeyKeeper(Key::IPKdf::Ptr ownerKdf, const KeeperCompletion&) noexcept;
     };
 }
