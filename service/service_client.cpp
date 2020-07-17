@@ -69,10 +69,12 @@ namespace beam::wallet {
         , _withAssets(withAssets)
         , _wsSend(std::move(wsSend))
     {
+        LOG_DEBUG () << "Service client create";
     }
 
     ServiceClient::~ServiceClient() noexcept
     {
+        LOG_DEBUG () << "Service client destroy";
     }
 
     void ServiceClient::ReactorThread_onWSDataReceived(const std::string& data)
@@ -87,15 +89,14 @@ namespace beam::wallet {
                 if (_keeperCallbacks.empty())
                     return;
 
-                LOG_INFO() << "Keeper pop for id " << msg["id"] << ", method " << msg["method"];
-                _keeperCallbacks.front()(msg["result"]);
+                auto cback = _keeperCallbacks.front();
                 _keeperCallbacks.pop();
-                LOG_INFO() << "Keeper pop OK for id " << msg["id"] << ", method " << msg["method"];
+                cback(msg["result"]);
             }
             else if (WalletApi::existsJsonParam(msg, "error"))
             {
                 const auto& error = msg["error"];
-                LOG_ERROR() << "JSON RPC error id: " << error["id"] << " message: " << error["message"];
+                LOG_ERROR() << "JSON RPC error " << error["message"];
             }
             else
             {
@@ -143,43 +144,30 @@ namespace beam::wallet {
 
     void ServiceClient::onWalletApiMessage(const JsonRpcId& id, const CreateWallet& data)
     {
-        if (_created) {
-            return WalletServiceApi::doError(id, ApiError::ThrottleError, "Wallet has been created in this session. Reconnect and try again");
-        }
-
         try
         {
             LOG_DEBUG() << "CreateWallet(id = " << id << ")";
 
             beam::KeyString ks;
-
             ks.SetPassword(data.pass);
             ks.m_sRes = data.ownerKey;
-
             std::shared_ptr<ECC::HKdfPub> ownerKdf = std::make_shared<ECC::HKdfPub>();
 
             if (ks.Import(*ownerKdf))
             {
-                auto keyKeeper = createKeyKeeper(ownerKdf);
                 auto dbName = generateWalletID(ownerKdf);
-                IWalletDB::Ptr walletDB = WalletDB::init(makeDBPath(dbName), SecString(data.pass), keyKeeper);
-
+                auto walletDB = WalletDB::initNoKeepr(makeDBPath(dbName), SecString(data.pass));
                 if (walletDB)
                 {
-                    _walletMap[dbName] = WalletInfo({}, walletDB);
-                    // generate default address
                     WalletAddress address;
                     walletDB->createAddress(address);
                     address.m_label = "default";
                     walletDB->saveAddress(address);
-
-                    sendApiResponse(id, CreateWallet::Response{dbName});
-                    _created = true;
-                    return;
+                    return sendApiResponse(id, CreateWallet::Response{dbName});
                 }
             }
 
-            WalletServiceApi::doError(id, ApiError::InternalErrorJsonRpc, "Wallet not created.");
+            return WalletServiceApi::doError(id, ApiError::InternalErrorJsonRpc, "Wallet not created.");
         }
         catch (const DatabaseException& ex)
         {
@@ -199,120 +187,150 @@ namespace beam::wallet {
 
         OnUntilExit guard(_opening);
 
-        try
-        {
-            std::shared_ptr<Wallet> wallet;
-            std::shared_ptr<IWalletDB> walletDB;
+        std::shared_ptr<Wallet> wallet;
+        std::shared_ptr<IWalletDB> walletDB;
 
-            auto it = _walletMap.find(data.id);
-            if (it != _walletMap.end())
+        auto it = _walletMap.find(data.id);
+        if (it != _walletMap.end())
+        {
+            wallet = it->second.wallet.lock();
+            if (wallet)
             {
-                wallet = it->second.wallet.lock();
-                if (wallet)
+                if (data.freshKeeper)
                 {
-                    if (data.freshKeeper)
+                    // TODO: support multiple keykeepers OR support close of other sessions
+                    return WalletServiceApi::doError(id, ApiError::InternalErrorJsonRpc, "Wallet is opened in another session.");
+                }
+
+                // this should always succeed, wallet keeps db
+                walletDB = it->second.walletDB.lock();
+                assert(walletDB != nullptr);
+
+                LOG_DEBUG() << "Found already opened wallet " << data.id;
+                _wallet = wallet;
+                _walletDB = walletDB;
+
+                auto session = generateUid();
+                return sendApiResponse(id, OpenWallet::Response{session});
+            }
+        }
+
+        createKeyKeeperFromDB(data.id, data.pass, [sp = shared_from_this(), id, data, walletDB, wallet](IPrivateKeyKeeper2::Ptr keeper, OptionalError err) mutable {
+            if (!keeper)
+            {
+                assert(false);
+                std::string errmsg = "Failed to create keykeepr";
+
+                if (err.has_value()) {
+                    errmsg += std::string(": ") + err.value().what();
+                }
+
+                return sp->doError(id, ApiError::InternalErrorJsonRpc, errmsg );
+            }
+
+            try
+            {
+                // open throws on error
+                // open can initiate sync keeper calls, everything MUST be cached before this function call
+                walletDB = WalletDB::open(makeDBPath(data.id), SecString(data.pass), keeper);
+
+                // just in case somebody forgets to throw
+                if (!walletDB)
+                {
+                    assert(false);
+                    return sp->doError(id, ApiError::InternalErrorJsonRpc, "Failed to open database");
+                }
+
+                //
+                // Create and start wallet
+                //
+
+                // throws on error
+                wallet = std::make_shared<Wallet>(walletDB, sp->_withAssets);
+
+                // just in case somebody forgets to throw
+                if (!wallet)
+                {
+                    assert(false);
+                    return sp->doError(id, ApiError::InternalErrorJsonRpc, "Failed to create wallet");
+                }
+
+                wallet->ResumeAllTransactions();
+                if (data.freshKeeper)
+                {
+                    // We won't be able to sign with the fresh keykeeper, nonces are regenerated
+                    wallet->VisitActiveTransaction([&](const TxID &txid, BaseTransaction::Ptr tx) {
+                        if (tx->GetType() == TxType::Simple)
+                        {
+                            SimpleTransaction::State state = SimpleTransaction::State::Initial;
+                            if (tx->GetParameter(TxParameterID::State, state))
+                            {
+                                if (state < SimpleTransaction::State::Registration)
+                                {
+                                    LOG_DEBUG() << "Fresh keykeeper transaction cancel, txid " << txid
+                                                << " , state " << state;
+                                    wallet->CancelTransaction(txid);
+                                }
+                            }
+                        }
+                    });
+                }
+
+                //
+                // Spin up network connection
+                //
+                auto nnet = std::make_shared<ServiceNodeConnection>(*wallet);
+                nnet->m_Cfg.m_PollPeriod_ms = 0;//options.pollPeriod_ms.value;
+
+                if (nnet->m_Cfg.m_PollPeriod_ms)
+                {
+                    LOG_INFO() << "Node poll period = " << nnet->m_Cfg.m_PollPeriod_ms << " ms";
+                    uint32_t timeout_ms = std::max(Rules::get().DA.Target_s * 1000, nnet->m_Cfg.m_PollPeriod_ms);
+                    if (timeout_ms != nnet->m_Cfg.m_PollPeriod_ms)
                     {
-                        // TODO: support multiple keykeepers OR support close of other sessions
-                        return WalletServiceApi::doError(id, ApiError::InternalErrorJsonRpc, "Wallet is opened in another session.");
+                        LOG_INFO() << "Node poll period has been automatically rounded up to block rate: "
+                                   << timeout_ms << " ms";
                     }
-
-                    // this should always succeed, wallet keeps db
-                    walletDB = it->second.walletDB.lock();
-                    assert(walletDB != nullptr);
                 }
-            }
 
-            // throws on error
-            auto keeper = createKeyKeeperFromDB(data.id, data.pass);
-
-            // just in case somebody forgets to throw
-            if (!keeper) {
-                assert(false);
-                return WalletServiceApi::doError(id, ApiError::InternalErrorJsonRpc, "Failed to create keykeeper");
-            }
-
-            // open throws on error
-            // open can initiate async communication via socket (to get kdfs) and block until operation completes
-            walletDB = WalletDB::open(makeDBPath(data.id), SecString(data.pass), keeper);
-
-            // just in case somebody forgets to throw
-            if (!walletDB) {
-                assert(false);
-                return WalletServiceApi::doError(id, ApiError::InternalErrorJsonRpc, "Failed to open database");
-            }
-
-            // throws on error
-            wallet  = std::make_shared<Wallet>(walletDB, _withAssets);
-
-            // just in case somebody forgets to throw
-            if (!wallet) {
-                assert(false);
-                return WalletServiceApi::doError(id, ApiError::InternalErrorJsonRpc, "Failed to create wallet");
-            }
-
-            wallet->ResumeAllTransactions();
-            if (data.freshKeeper) {
-                // We won't be able to sign with the fresh keykeeper, nonces are regenerated
-                wallet->VisitActiveTransaction([&](const TxID& txid, BaseTransaction::Ptr tx) {
-                   if (tx->GetType() == TxType::Simple)
-                   {
-                       SimpleTransaction::State state = SimpleTransaction::State::Initial;
-                       if (tx->GetParameter(TxParameterID::State, state))
-                       {
-                           if (state < SimpleTransaction::State::Registration)
-                           {
-                               LOG_DEBUG() << "Fresh keykeeper transaction cancel, txid " << txid << " , state " << state;
-                               wallet->CancelTransaction(txid);
-                           }
-                       }
-                   }
-                });
-            }
-
-            auto nnet = std::make_shared<ServiceNodeConnection>(*_wallet);
-            nnet->m_Cfg.m_PollPeriod_ms = 0;//options.pollPeriod_ms.value;
-
-            if (nnet->m_Cfg.m_PollPeriod_ms)
-            {
-                LOG_INFO() << "Node poll period = " << nnet->m_Cfg.m_PollPeriod_ms << " ms";
-                uint32_t timeout_ms = std::max(Rules::get().DA.Target_s * 1000, nnet->m_Cfg.m_PollPeriod_ms);
-                if (timeout_ms != nnet->m_Cfg.m_PollPeriod_ms)
+                uint32_t responseTime_s = Rules::get().DA.Target_s * wallet::kDefaultTxResponseTime;
+                if (nnet->m_Cfg.m_PollPeriod_ms >= responseTime_s * 1000)
                 {
-                    LOG_INFO() << "Node poll period has been automatically rounded up to block rate: "
-                               << timeout_ms << " ms";
+                    LOG_WARNING() << "The \"--node_poll_period\" parameter set to more than "
+                                  << uint32_t(responseTime_s / 3600) << " hours may cause transaction problems.";
                 }
-            }
+                nnet->m_Cfg.m_vNodes.push_back(sp->_nodeAddr);
+                nnet->Connect();
 
-            uint32_t responceTime_s = Rules::get().DA.Target_s * wallet::kDefaultTxResponseTime;
-            if (nnet->m_Cfg.m_PollPeriod_ms >= responceTime_s * 1000)
+                auto wnet = std::make_shared<WalletNetworkViaBbs>(*wallet, nnet, walletDB);
+                wallet->AddMessageEndpoint(wnet);
+                wallet->SetNodeEndpoint(nnet);
+
+                //
+                // We're done!
+                //
+                LOG_DEBUG() << "Wallet successfully opened, wallet id " << data.id;
+                sp->_wallet = wallet;
+                sp->_walletDB = walletDB;
+                sp->_walletMap[data.id].walletDB = sp->_walletDB; // weak ref
+                sp->_walletMap[data.id].wallet = sp->_wallet; // weak ref
+
+                auto session = generateUid();
+                return sp->sendApiResponse(id, OpenWallet::Response{session});
+            }
+            catch(const DatabaseNotFoundException& ex)
             {
-                LOG_WARNING() << "The \"--node_poll_period\" parameter set to more than "
-                              << uint32_t(responceTime_s / 3600) << " hours may cause transaction problems.";
+                return sp->doError(id, ApiError::DatabaseNotFound, ex.what());
             }
-            nnet->m_Cfg.m_vNodes.push_back(_nodeAddr);
-            nnet->Connect();
-
-            auto wnet = std::make_shared<WalletNetworkViaBbs>(*wallet, nnet, walletDB);
-            wallet->AddMessageEndpoint(wnet);
-            wallet->SetNodeEndpoint(nnet);
-
-            LOG_DEBUG() << "Wallet successfully opened, wallet id " << data.id;
-            _wallet = wallet;
-            _walletDB = walletDB;
-            _walletMap[data.id].walletDB = _walletDB; // weak ref
-            _walletMap[data.id].wallet = _wallet; // weak ref
-
-            auto session = generateUid();
-            sendApiResponse(id, OpenWallet::Response{session});
-        }
-        catch(const DatabaseNotFoundException& ex)
-        {
-            return WalletServiceApi::doError(id, ApiError::DatabaseNotFound, ex.what());
-        }
-        catch(const DatabaseException& ex)
-        {
-            return WalletServiceApi::doError(id, ApiError::DatabaseError, ex.what());
-        }
+            catch(const DatabaseException& ex)
+            {
+                return sp->doError(id, ApiError::DatabaseError, ex.what());
+            }
+            catch(const std::runtime_error& ex)
+            {
+                return sp->doError(id, ApiError::InternalErrorJsonRpc, ex.what());
+            }
+        });
     }
 
     void ServiceClient::onWalletApiMessage(const JsonRpcId& id, const wallet::Ping& data)
@@ -365,21 +383,83 @@ namespace beam::wallet {
         std::shared_ptr<ECC::HKdfPub> ownerKdf = std::make_shared<ECC::HKdfPub>();
         if (ks.Import(*ownerKdf))
         {
-            return createKeyKeeper(ownerKdf);
+            /// TODO: Check if init needs cache
+            return std::make_shared<WasmKeyKeeperProxy>(ownerKdf, shared_from_this());
         }
 
-        return {};
+        return nullptr;
     }
 
-    IPrivateKeyKeeper2::Ptr ServiceClient::createKeyKeeperFromDB(const std::string& id, const std::string& pass)
+    void ServiceClient::createKeyKeeperFromDB(const std::string& id, const std::string& pass, const KeeperCompletion& cback) noexcept
     {
-        auto walletDB = WalletDB::open(makeDBPath(id), SecString(pass));
-        Key::IPKdf::Ptr pKey = walletDB->get_OwnerKdf();
-        return createKeyKeeper(pKey);
+        try
+        {
+            auto walletDB = WalletDB::open(makeDBPath(id), SecString(pass));
+            Key::IPKdf::Ptr pKey = walletDB->get_OwnerKdf();
+            return createKeyKeeper(pKey, cback);
+        }
+        catch(const std::runtime_error& err)
+        {
+            return cback(nullptr, err);
+        }
     }
 
-    IPrivateKeyKeeper2::Ptr ServiceClient::createKeyKeeper(Key::IPKdf::Ptr ownerKdf)
+    void ServiceClient::createKeyKeeper(Key::IPKdf::Ptr ownerKdf, const KeeperCompletion& cback) noexcept
     {
-        return std::make_shared<WasmKeyKeeperProxy>(ownerKdf, *this);
+        auto keeper = std::make_shared<WasmKeyKeeperProxy>(ownerKdf, shared_from_this());
+
+        //
+        // We need to cache some data to prevent sync locks in the future
+        // TODO: remove this hack, make keykeeper fully async
+        //
+        struct baseHandler: public IPrivateKeyKeeper2::Handler {
+            KeeperCompletion Completion;
+            std::shared_ptr<ServiceClient> Client;
+            std::shared_ptr<WasmKeyKeeperProxy> Keeper;
+        };
+
+        struct getSlotsHandler: public baseHandler {
+            IPrivateKeyKeeper2::Method::get_NumSlots getSlots = {0};
+
+            void OnDone(IPrivateKeyKeeper2::Status::Type status) override {
+                if (status != IPrivateKeyKeeper2::Status::Success)
+                {
+                    return Completion(nullptr, std::runtime_error("Failed to get slots"));
+                }
+
+                Keeper->cacheSlots(getSlots.m_Count);
+                return Completion(Keeper, boost::none);
+            }
+        };
+
+        struct getSbbsKdfHandler: public baseHandler
+        {
+            IPrivateKeyKeeper2::Method::get_Kdf getKdf = {0};
+
+            getSbbsKdfHandler () {
+                getKdf.m_Root = false;
+                getKdf.m_iChild = Key::Index(-1);
+            }
+
+            void OnDone(IPrivateKeyKeeper2::Status::Type status) override {
+                if (status != IPrivateKeyKeeper2::Status::Success)
+                {
+                    return Completion(nullptr, std::runtime_error("Failed to get sbbs kdf"));
+                }
+
+                Keeper->cacheSbbsKdf(getKdf.m_iChild, getKdf.m_pPKdf);
+                auto handler = std::make_shared<getSlotsHandler>();
+                handler->Completion = Completion;
+                handler->Client     = Client;
+                handler->Keeper     = Keeper;
+                Keeper->InvokeAsync(handler->getSlots, handler);
+            }
+        };
+
+        auto handler = std::make_shared<getSbbsKdfHandler>();
+        handler->Completion = cback;
+        handler->Client     = shared_from_this();
+        handler->Keeper     = keeper;
+        keeper->InvokeAsync(handler->getKdf, handler);
     }
 }
