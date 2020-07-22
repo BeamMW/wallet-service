@@ -127,40 +127,77 @@ namespace beam::wallet {
 
     void ServiceClient::onWalletApiMessage(const JsonRpcId& id, const CreateWallet& data)
     {
-        try
+        LOG_DEBUG() << "CreateWallet(id = " << id << " this " << this << "-" << _creating << ")";
+
+        if (_wallet) {
+            return WalletServiceApi::doError(id, ApiError::InternalErrorJsonRpc, "Database already opened");
+        }
+
+        if (_creating) {
+            return WalletServiceApi::doError(id, ApiError::InternalErrorJsonRpc, "Create operation is already pending");
+        }
+
+        _creating = true;
+        LOG_INFO() << "Create wallet after guards this " << this << "-" << _creating;
+
+        beam::KeyString ks;
+        ks.SetPassword(data.pass);
+        ks.m_sRes = data.ownerKey;
+        std::shared_ptr<ECC::HKdfPub> ownerKdf = std::make_shared<ECC::HKdfPub>();
+
+        if (!ks.Import(*ownerKdf))
         {
-            LOG_DEBUG() << "CreateWallet(id = " << id << ")";
+            _creating = false;
+            return WalletServiceApi::doError(id, ApiError::InternalErrorJsonRpc, "Failed to import owner kdf.");
+        }
 
-            beam::KeyString ks;
-            ks.SetPassword(data.pass);
-            ks.m_sRes = data.ownerKey;
-            std::shared_ptr<ECC::HKdfPub> ownerKdf = std::make_shared<ECC::HKdfPub>();
-
-            if (ks.Import(*ownerKdf))
+        createKeyKeeper(ownerKdf, [id, ownerKdf, pass = data.pass, sp = shared_from_this()](IPrivateKeyKeeper2::Ptr keeper, OptionalError err) {
+            if (!keeper)
             {
-                auto dbName = generateWalletID(ownerKdf);
-                auto walletDB = WalletDB::initNoKeepr(makeDBPath(dbName), SecString(data.pass));
-                if (walletDB)
-                {
-                    WalletAddress address;
-                    walletDB->createAddress(address);
-                    address.m_label = "default";
-                    walletDB->saveAddress(address);
-                    return sendApiResponse(id, CreateWallet::Response{dbName});
+                std::string errmsg = "Failed to create keykeepr";
+
+                if (err.has_value()) {
+                    errmsg += std::string(": ") + err.value().what();
                 }
+
+                sp->_creating = false;
+                return sp->doError(id, ApiError::InternalErrorJsonRpc, errmsg );
             }
 
-            return WalletServiceApi::doError(id, ApiError::InternalErrorJsonRpc, "Wallet not created.");
-        }
-        catch (const DatabaseException& ex)
-        {
-             WalletServiceApi::doError(id, ApiError::DatabaseError, ex.what());
-        }
+            try
+            {
+                auto dbName = generateWalletID(ownerKdf);
+                auto walletDB = WalletDB::init(makeDBPath(dbName), SecString(pass), keeper);
+                if (!walletDB)
+                {
+                    sp->_creating = false;
+                    return sp->doError(id, ApiError::InternalErrorJsonRpc, "Failed to initialize wallet.");
+                }
+
+                WalletAddress address;
+                walletDB->createAddress(address);
+                address.m_label = "default";
+                walletDB->saveAddress(address);
+
+                sp->_creating = false;
+                return sp->sendApiResponse(id, CreateWallet::Response{dbName});
+            }
+            catch(const DatabaseException& ex)
+            {
+                sp->_creating = false;
+                return sp->doError(id, ApiError::DatabaseError, ex.what());
+            }
+            catch(const std::runtime_error& ex)
+            {
+                sp->_creating = false;
+                return sp->doError(id, ApiError::InternalErrorJsonRpc, ex.what());
+            }
+        });
     }
 
     void ServiceClient::onWalletApiMessage(const JsonRpcId &id, const OpenWallet &data)
     {
-        LOG_DEBUG() << "Open wallet this " << this << "-" << _opening;
+        LOG_DEBUG() << "OpenWallet(id = " << id << " this " << this << "-" << _opening << ")";
 
         if (_wallet) {
             return WalletServiceApi::doError(id, ApiError::InternalErrorJsonRpc, "Database already opened");
@@ -206,7 +243,6 @@ namespace beam::wallet {
         createKeyKeeperFromDB(data.id, data.pass, [sp = shared_from_this(), id, data, walletDB, wallet](IPrivateKeyKeeper2::Ptr keeper, OptionalError err) mutable {
             if (!keeper)
             {
-                assert(false);
                 std::string errmsg = "Failed to create keykeepr";
 
                 if (err.has_value()) {

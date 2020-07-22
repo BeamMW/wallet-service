@@ -120,6 +120,7 @@ namespace beam::wallet {
         bool                      _withAssets;
         WebSocketServer::SendFunc _wsSend;
         bool                      _opening = false;
+        bool                      _creating = false;
 
         using OptionalError = boost::optional<std::runtime_error>;
         using KeeperCompletion = std::function<void (IPrivateKeyKeeper2::Ptr, OptionalError)>;
