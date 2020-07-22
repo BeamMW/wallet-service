@@ -36,10 +36,13 @@ namespace beam::wallet {
         , _reactor(std::move(reactor))
         , _creator(std::move(creator))
     {
+        LOG_DEBUG() << "WebsocketSession created";
     }
 
     WebsocketSession::~WebsocketSession()
     {
+        LOG_DEBUG() << "WebsocketSession destroyed";
+
         // Client handler must be destroyed in the Loop thread
         // Transfer ownership and register destroy request
         _reactor->callAsync([handler = std::move(_handler)] () mutable {

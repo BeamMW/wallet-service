@@ -123,23 +123,6 @@ namespace beam::wallet {
     void ServiceClient::socketSend(const json& msg)
     {
         socketSend(msg.dump());
-
-        const char* jsonError = "error";
-        const char* jsonCode  = "code";
-
-        if (existsJsonParam(msg, jsonError))
-        {
-            const auto& error = msg[jsonError];
-            if (existsJsonParam(error, jsonCode))
-            {
-                const auto &code = error[jsonCode];
-                if (code.is_number_integer() && code == ApiError::ThrottleError)
-                {
-                    int a = 0;
-                    a++;
-                }
-            }
-        }
     }
 
     void ServiceClient::onWalletApiMessage(const JsonRpcId& id, const CreateWallet& data)
@@ -177,6 +160,8 @@ namespace beam::wallet {
 
     void ServiceClient::onWalletApiMessage(const JsonRpcId &id, const OpenWallet &data)
     {
+        LOG_DEBUG() << "Open wallet this " << this << "-" << _opening;
+
         if (_wallet) {
             return WalletServiceApi::doError(id, ApiError::InternalErrorJsonRpc, "Database already opened");
         }
@@ -185,7 +170,8 @@ namespace beam::wallet {
             return WalletServiceApi::doError(id, ApiError::InternalErrorJsonRpc, "Open operation is already pending");
         }
 
-        OnUntilExit guard(_opening);
+        _opening = true;
+        LOG_INFO() << "Open wallet after guards this " << this << "-" << _opening;
 
         std::shared_ptr<Wallet> wallet;
         std::shared_ptr<IWalletDB> walletDB;
@@ -199,6 +185,7 @@ namespace beam::wallet {
                 if (data.freshKeeper)
                 {
                     // TODO: support multiple keykeepers OR support close of other sessions
+                    _opening = false;
                     return WalletServiceApi::doError(id, ApiError::InternalErrorJsonRpc, "Wallet is opened in another session.");
                 }
 
@@ -211,6 +198,7 @@ namespace beam::wallet {
                 _walletDB = walletDB;
 
                 auto session = generateUid();
+                _opening = false;
                 return sendApiResponse(id, OpenWallet::Response{session});
             }
         }
@@ -225,6 +213,7 @@ namespace beam::wallet {
                     errmsg += std::string(": ") + err.value().what();
                 }
 
+                sp->_opening = false;
                 return sp->doError(id, ApiError::InternalErrorJsonRpc, errmsg );
             }
 
@@ -238,6 +227,7 @@ namespace beam::wallet {
                 if (!walletDB)
                 {
                     assert(false);
+                    sp->_opening = false;
                     return sp->doError(id, ApiError::InternalErrorJsonRpc, "Failed to open database");
                 }
 
@@ -252,6 +242,7 @@ namespace beam::wallet {
                 if (!wallet)
                 {
                     assert(false);
+                    sp->_opening = false;
                     return sp->doError(id, ApiError::InternalErrorJsonRpc, "Failed to create wallet");
                 }
 
@@ -316,18 +307,22 @@ namespace beam::wallet {
                 sp->_walletMap[data.id].wallet = sp->_wallet; // weak ref
 
                 auto session = generateUid();
+                sp->_opening = false;
                 return sp->sendApiResponse(id, OpenWallet::Response{session});
             }
             catch(const DatabaseNotFoundException& ex)
             {
+                sp->_opening = false;
                 return sp->doError(id, ApiError::DatabaseNotFound, ex.what());
             }
             catch(const DatabaseException& ex)
             {
+                sp->_opening = false;
                 return sp->doError(id, ApiError::DatabaseError, ex.what());
             }
             catch(const std::runtime_error& ex)
             {
+                sp->_opening = false;
                 return sp->doError(id, ApiError::InternalErrorJsonRpc, ex.what());
             }
         });
